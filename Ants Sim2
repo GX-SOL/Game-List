@@ -1,0 +1,336 @@
+-- ⚙️ GX-HUB SCRIPT [System v1.0.2]
+
+-- :: Dependencies ::
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+
+-- :: Runtime State Variables ::
+local autoFarm, autoConvert, autoBuyEgg, walkSpeedLoop = false, false, false, false
+local platformInput, eggId, walkSpeed = "1", 1, 16
+local userDefinedBagCap = 0
+local savedPosition = nil
+
+-- 🧭 :: GX-HUB Interface Initialization ::
+local Window = Rayfield:CreateWindow({
+    Name = "GX-HUB [System v1.0.2]",
+    LoadingTitle = "[⚙️ GX-HUB - System Booting]",
+    LoadingSubtitle = "Simple • Clean • Responsive",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "GX-HUB"
+    },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+-- ℹ️ :: Info Panel - Function Reference ::
+local infoTab = Window:CreateTab("📘 Info & Help", 4483362458)
+infoTab:CreateParagraph({
+    Title = "📖 GX-HUB System Manual",
+    Content = [[
+Welcome to **GX-HUB [System v1.0.2]**
+
+🧩 **Overview**
+GX-HUB provides practical functions for efficient gameplay enhancement without unnecessary complexity.
+
+🛠️ **Features:**
+
+🔹 **Auto Farm**
+Farms nearby available resources or interactables automatically.
+
+🔹 **Auto Convert**
+Moves the character to the nearest active platform (Pad) once bag capacity is reached. Set your preferred Platform ID (1 to 5).
+
+🔹 **Auto Buy Egg**
+Auto-purchases selected Egg based on Egg ID (1-10). Requires valid Egg ID to function.
+
+🔹 **Walk Speed Lock**
+Maintains a stable walk speed to bypass slow effects.
+
+🔹 **Teleport Panel**
+Instantly access areas like Fields, Shops, HQs, Hives.
+Supports legacy travel systems: Slingshot & Red Cannon.
+
+📌 **Instructions:**
+1. Adjust bag cap limit for Auto Convert.
+2. Input Platform ID to identify convert point.
+3. Provide Egg ID to use Auto Buy Egg.
+4. Enable toggles in each tab to start functions.
+
+📎 **Tips:**
+- Anti-AFK available to prevent disconnection.
+- Save your setup with config saving.
+    ]]
+})
+
+-- 💬 :: System Notifications ::
+Rayfield:Notify({
+    Title = "System v1.0.2",
+    Content = "All core systems operational.",
+    Duration = 4,
+    Icon = 4483362458
+})
+
+Rayfield:Notify({
+    Title = "Modules Synced",
+    Content = "Features ready. Interface optimized.",
+    Duration = 4,
+    Icon = 4483362458
+})
+
+Rayfield:Notify({
+    Title = "Teleport Panel Ready",
+    Content = "Includes Slingshot & Red Cannon.",
+    Duration = 4,
+    Icon = 4483362458
+})
+
+-- [✔️ Access features via Main, Utility, and Teleports tabs. Slingshot & Red Cannon retained.]
+
+
+-- 🚀 Main Tab
+local mainTab = Window:CreateTab("🚀 Main", 4483362458)
+mainTab:CreateInput({
+    Name = "🎒 Max Bag Capacity (Required)",
+    PlaceholderText = "Enter your exact pollen cap",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(input)
+        local value = tonumber(input)
+        if value then userDefinedBagCap = value end
+    end
+})
+
+mainTab:CreateInput({
+    Name = "🏔️ Anthill Platform (1-5)",
+    PlaceholderText = "e.g., 1",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        platformInput = tostring(text)
+    end
+})
+
+mainTab:CreateToggle({
+    Name = "⚒️ Auto Farm (0.01s)",
+    CurrentValue = false,
+    Callback = function(value)
+        autoFarm = value
+        task.spawn(function()
+            while autoFarm do
+                ReplicatedStorage.Events.Server_Event:FireServer("UseTool", 1)
+                task.wait(0.01)
+            end
+        end)
+    end
+})
+
+mainTab:CreateToggle({
+    Name = "🌾 Auto Convert (Bag Full)",
+    CurrentValue = false,
+    Callback = function(value)
+        autoConvert = value
+        task.spawn(function()
+            while autoConvert do
+                local stats = player:FindFirstChild("Leaderstats")
+                local pollenStat = stats and stats:FindFirstChild("Pollen")
+
+                if pollenStat and userDefinedBagCap > 0 then
+                    local pollen = pollenStat.Value
+                    if pollen >= userDefinedBagCap then
+                        local anthill = workspace:WaitForChild("Anthills"):FindFirstChild(platformInput)
+                        local platform = anthill and anthill:FindFirstChild("Platform")
+
+                        if platform then
+                            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                            if root then
+                                local savedPosition = root.Position
+                                local platformTop = platform.Position.Y + (platform.Size.Y / 2)
+                                local teleportPosition = Vector3.new(platform.Position.X, platformTop + 10, platform.Position.Z)
+
+                                root.CFrame = CFrame.new(teleportPosition)
+                                task.wait(0.5)
+
+                                ReplicatedStorage.Events.Server_Function:InvokeServer("ActionCall", "Anthill", platform)
+
+                                repeat task.wait(0.5)
+                                    pollen = pollenStat.Value
+                                until pollen <= 0 or not autoConvert
+
+                                if pollen <= 0 and savedPosition then
+                                    player.Character:MoveTo(savedPosition)
+                                end
+                            end
+                        end
+                    end
+                end
+
+                task.wait(0.5)
+            end
+        end)
+    end
+})
+
+mainTab:CreateToggle({
+    Name = "🥚 Auto Buy Egg (No Incubate)",
+    CurrentValue = false,
+    Callback = function(value)
+        autoBuyEgg = value
+        task.spawn(function()
+            while autoBuyEgg do
+                ReplicatedStorage.Events.Server_Function:InvokeServer("ShopPurchaseRequest", "EggShop", tonumber(eggId))
+                task.wait(2)
+            end
+        end)
+    end
+})
+
+mainTab:CreateInput({
+    Name = "🆔 Egg ID (1-10)",
+    PlaceholderText = "Enter Egg ID",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        eggId = tonumber(text) or 1
+    end
+})
+
+-- 🧰 Utilities Tab
+local miscTab = Window:CreateTab("🧰 Utilities", 4483362458)
+miscTab:CreateInput({
+    Name = "🏃 Walk Speed",
+    PlaceholderText = "Default: 16",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        walkSpeed = tonumber(text) or 16
+    end
+})
+
+miscTab:CreateToggle({
+    Name = "♮️ Constant Walk Speed",
+    CurrentValue = false,
+    Callback = function(value)
+        walkSpeedLoop = value
+        task.spawn(function()
+            while walkSpeedLoop do
+                pcall(function()
+                    if player.Character and player.Character:FindFirstChild("Humanoid") then
+                        player.Character.Humanoid.WalkSpeed = walkSpeed
+                    end
+                end)
+                task.wait(0.2)
+            end
+        end)
+    end
+})
+
+miscTab:CreateButton({
+    Name = "🛡️ Enable Anti-AFK",
+    Callback = function()
+        local vu = game:GetService("VirtualUser")
+        player.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        end)
+    end
+})
+
+miscTab:CreateButton({
+    Name = "🔁 Rejoin Server",
+    Callback = function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end
+})
+
+miscTab:CreateButton({
+    Name = "🗌 Copy Server ID",
+    Callback = function()
+        setclipboard(game.JobId)
+    end
+})
+
+miscTab:CreateButton({
+    Name = "🧪 Load SimpleSpy",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))()
+    end
+})
+
+miscTab:CreateButton({
+    Name = "📂 Load Dex Explorer",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/InfyScipt/backup/main/universaldex.lua"))()
+    end
+})
+
+miscTab:CreateButton({
+    Name = "💾 Save Configuration",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+    end
+})
+
+-- 📍 Teleports Tab
+local teleTab = Window:CreateTab("📍 Teleports", 4483362458)
+teleTab:CreateButton({
+    Name = "📦 Teleport to Incubators",
+    Callback = function()
+        local target = workspace.Incubators._.Model:GetChildren()[2]
+        if target then
+            local pos = target.Position + Vector3.new(0, 10, 0)
+            player.Character:MoveTo(pos)
+        end
+    end
+})
+
+teleTab:CreateButton({
+    Name = "🛍️ Teleport to Shop (Path #614)",
+    Callback = function()
+        local target = workspace.Paths:GetChildren()[614]
+        if target then
+            player.Character:MoveTo(target.Position + Vector3.new(0, 10, 0))
+        end
+    end
+})
+
+teleTab:CreateButton({
+    Name = "🎯 Teleport to Red Cannon",
+    Callback = function()
+        local target = workspace:FindFirstChild("Cannons") and workspace.Cannons:FindFirstChild("Red")
+        if target then
+            player.Character:MoveTo(target.Position + Vector3.new(0, 10, 0))
+        end
+    end
+})
+
+teleTab:CreateButton({
+    Name = "🏹 Teleport to Slingshot",
+    Callback = function()
+        local target = workspace:FindFirstChild("Slingshot")
+        if target then
+            player.Character:MoveTo(target.Position + Vector3.new(0, 10, 0))
+        end
+    end
+})
+
+teleTab:CreateInput({
+    Name = "🏠 Teleport Home (Platform 1-5)",
+    PlaceholderText = "Enter platform number",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        local pnum = tonumber(text)
+        if pnum and workspace.Anthills:FindFirstChild(tostring(pnum)) then
+            local platform = workspace.Anthills[tostring(pnum)].Platform
+            if platform and platform:FindFirstChild("Model") then
+                local target = platform.Model:GetChildren()[13]
+                if target then
+                    player.Character:MoveTo(target.Position + Vector3.new(0, 10, 0))
+                end
+            end
+        end
+    end
+})
