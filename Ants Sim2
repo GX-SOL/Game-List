@@ -1,6 +1,6 @@
--- ⚙️ GX-HUB SCRIPT [System v1.0.2]
+-- GX-HUB SCRIPT
 
--- :: Dependencies ::
+-- Services
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,17 +10,17 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 
--- :: Runtime State Variables ::
+-- State Variables
 local autoFarm, autoConvert, autoBuyEgg, walkSpeedLoop = false, false, false, false
 local platformInput, eggId, walkSpeed = "1", 1, 16
 local userDefinedBagCap = 0
 local savedPosition = nil
 
--- 🧭 :: GX-HUB Interface Initialization ::
+-- Rayfield Window
 local Window = Rayfield:CreateWindow({
-    Name = "GX-HUB [System v1.0.2]",
-    LoadingTitle = "[⚙️ GX-HUB - System Booting]",
-    LoadingSubtitle = "Simple • Clean • Responsive",
+    Name = "GX-HUB",
+    LoadingTitle = "Initializing GX-HUB...",
+    LoadingSubtitle = "Rayfield x GX_SOL collab",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "GX-HUB"
@@ -29,70 +29,32 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- ℹ️ :: Info Panel - Function Reference ::
-local infoTab = Window:CreateTab("📘 Info & Help", 4483362458)
+-- ℹ️ Info Tab
+local infoTab = Window:CreateTab("ℹ️ Info", 4483362458)
 infoTab:CreateParagraph({
-    Title = "📖 GX-HUB System Manual",
-    Content = [[
-Welcome to **GX-HUB [System v1.0.2]**
+    Title = "📘 How To Use GX-HUB",
+    Content = [[Welcome to **GX-HUB**, your all-in-one automation script for farming, egg purchasing, and teleportation in your favorite game.
 
-🧩 **Overview**
-GX-HUB provides practical functions for efficient gameplay enhancement without unnecessary complexity.
+**🛠 Features:**
+- Auto Farm: Uses your tool rapidly.
+- Auto Convert: Converts pollen automatically when the bag is full.
+- Auto Buy Egg: Continuously buys eggs without incubation.
+- Constant Walk Speed: Keep your speed consistent.
+- Teleports: Move to important spots instantly.
 
-🛠️ **Features:**
+**💡 Instructions:**
+1. Set your **Max Bag Capacity** before using Auto Convert.
+2. Choose a **Platform Number (1-5)** in Anthill for converting.
+3. For Egg purchase, set the **Egg ID (1-10)**.
+4. Enable the features you want via toggles.
 
-🔹 **Auto Farm**
-Farms nearby available resources or interactables automatically.
+**⚠️ Notes:**
+- Anti-AFK prevents you from being kicked while idle.
+- Remember to save configuration after setting up.
 
-🔹 **Auto Convert**
-Moves the character to the nearest active platform (Pad) once bag capacity is reached. Set your preferred Platform ID (1 to 5).
-
-🔹 **Auto Buy Egg**
-Auto-purchases selected Egg based on Egg ID (1-10). Requires valid Egg ID to function.
-
-🔹 **Walk Speed Lock**
-Maintains a stable walk speed to bypass slow effects.
-
-🔹 **Teleport Panel**
-Instantly access areas like Fields, Shops, HQs, Hives.
-Supports legacy travel systems: Slingshot & Red Cannon.
-
-📌 **Instructions:**
-1. Adjust bag cap limit for Auto Convert.
-2. Input Platform ID to identify convert point.
-3. Provide Egg ID to use Auto Buy Egg.
-4. Enable toggles in each tab to start functions.
-
-📎 **Tips:**
-- Anti-AFK available to prevent disconnection.
-- Save your setup with config saving.
-    ]]
+Enjoy automation with style!
+]]
 })
-
--- 💬 :: System Notifications ::
-Rayfield:Notify({
-    Title = "System v1.0.2",
-    Content = "All core systems operational.",
-    Duration = 4,
-    Icon = 4483362458
-})
-
-Rayfield:Notify({
-    Title = "Modules Synced",
-    Content = "Features ready. Interface optimized.",
-    Duration = 4,
-    Icon = 4483362458
-})
-
-Rayfield:Notify({
-    Title = "Teleport Panel Ready",
-    Content = "Includes Slingshot & Red Cannon.",
-    Duration = 4,
-    Icon = 4483362458
-})
-
--- [✔️ Access features via Main, Utility, and Teleports tabs. Slingshot & Red Cannon retained.]
-
 
 -- 🚀 Main Tab
 local mainTab = Window:CreateTab("🚀 Main", 4483362458)
@@ -184,6 +146,44 @@ mainTab:CreateToggle({
             while autoBuyEgg do
                 ReplicatedStorage.Events.Server_Function:InvokeServer("ShopPurchaseRequest", "EggShop", tonumber(eggId))
                 task.wait(2)
+            end
+        end)
+    end
+})
+
+mainTab:CreateToggle({
+    Name = "🐣 Auto Buy Pet Slots",
+    CurrentValue = false,
+    Callback = function(value)
+        autoBuySlots = value
+
+        task.spawn(function()
+            local player = game:GetService("Players").LocalPlayer
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local slotsData = replicatedStorage:WaitForChild("Modules"):WaitForChild("InformationTables"):WaitForChild("Slots Cost")
+            local extraSlotsService = replicatedStorage:WaitForChild("Services"):WaitForChild("Extra-Slots")
+            local purchasedSlots = player:WaitForChild("Purchased"):WaitForChild("Slots")
+
+            while autoBuySlots do
+                local currentSlots = purchasedSlots.Value
+                local nextCost = slotsData[currentSlots + 1]
+
+                if nextCost then
+                    -- Optional: Check if player has enough currency (e.g., honey/gems), or just try to purchase.
+                    local success, err = pcall(function()
+                        extraSlotsService:InvokeServer()
+                    end)
+                    if success then
+                        print("[✅] Bought slot:", currentSlots + 1)
+                    else
+                        warn("[❌] Failed to buy slot:", err)
+                    end
+                else
+                    print("[⚠️] Max slots reached or slot cost missing for:", currentSlots + 1)
+                    autoBuySlots = false
+                end
+
+                task.wait(1)
             end
         end)
     end
@@ -334,3 +334,8 @@ teleTab:CreateInput({
         end
     end
 })
+
+-- ✅ Notifications
+Rayfield:Notify({Title = "GX-HUB", Content = "Main Tab Loaded", Duration = 3})
+Rayfield:Notify({Title = "GX-HUB", Content = "Utilities Loaded", Duration = 3})
+Rayfield:Notify({Title = "GX-HUB", Content = "Teleports Ready", Duration = 3})
