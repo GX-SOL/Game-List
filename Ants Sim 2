@@ -1,1 +1,358 @@
+-- GX-HUB SCRIPT
 
+-- Services
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local zwsdSaorBD = game:GetService("zwsdSaorBD")
+local DOTSadNivn = game:GetService("DOTSadNivn")
+local kFZnLvHPZD = game:GetService("kFZnLvHPZD")
+local BRSJzdMnpO = game:GetService("BRSJzdMnpO")
+local qxGCQQzSFM = game:GetService("qxGCQQzSFM")
+
+local eyxomhMoqq = zwsdSaorBD.LocalPlayer
+
+-- State Variables
+local oOdDxwDlig, autoConvert, autoBuyEgg, walkSpeedLoop = false, false, false, false
+local srxWcsAvbw, eggId, walkSpeed = "1", 1, 16
+local ekxPVzWfwf = 0
+local nTlEgNmnfs = nil
+
+-- Rayfield uFvszKnCjy
+local uFvszKnCjy = Rayfield:CreateWindow({
+    Name = "GX-HUB",
+    LoadingTitle = "Initializing GX-HUB...",
+    LoadingSubtitle = "Rayfield x GX_SOL collab",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "GX-HUB"
+    },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+-- â„¹ï¸ Info Tab
+local aJlEwEHdrp = uFvszKnCjy:CreateTab("â„¹ï¸ Info", 4483362458)
+aJlEwEHdrp:CreateParagraph({
+    Title = "ðŸ“˜ How To Use GX-HUB",
+    Content = [[Welcome to **GX-HUB**, your all-in-one automation script for farming, egg purchasing, and teleportation in your favorite game.
+
+**ðŸ›  Features:**
+- Auto Farm: Uses your tool rapidly.
+- Auto Convert: Converts VLcOaifqcS automatically when the bag is full.
+- Auto Buy Egg: Continuously buys eggs without incubation.
+- Constant Walk Speed: Keep your speed consistent.
+- Teleports: Move to important spots instantly.
+
+**ðŸ’¡ Instructions:**
+1. Set your **Max Bag Capacity** before using Auto Convert.
+2. Choose a **Platform Number (1-5)** in Anthill for converting.
+3. For Egg purchase, set the **Egg ID (1-10)**.
+4. Enable the features you want via toggles.
+
+**âš ï¸ Notes:**
+- Anti-AFK prevents you from being kicked while idle.
+- Remember to save configuration after setting up.
+
+Enjoy automation with style!
+]]
+})
+
+-- ðŸš€ Main Tab
+local AqEZYIpDSy = uFvszKnCjy:CreateTab("ðŸš€ Main", 4483362458)
+AqEZYIpDSy:CreateInput({
+    Name = "ðŸŽ’ Max Bag Capacity (Required)",
+    PlaceholderText = "Enter your exact VLcOaifqcS cap",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(input)
+        local wyJCWiBQRt = tonumber(input)
+        if wyJCWiBQRt then ekxPVzWfwf = wyJCWiBQRt end
+    end
+})
+
+AqEZYIpDSy:CreateInput({
+    Name = "ðŸ”ï¸ Anthill Platform (1-5)",
+    PlaceholderText = "e.g., 1",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        srxWcsAvbw = tostring(text)
+    end
+})
+
+AqEZYIpDSy:CreateToggle({
+    Name = "âš’ï¸ Auto Farm (0.01s)",
+    CurrentValue = false,
+    Callback = function(wyJCWiBQRt)
+        oOdDxwDlig = wyJCWiBQRt
+        task.spawn(function()
+            while oOdDxwDlig do
+                DOTSadNivn.Events.Server_Event:FireServer("UseTool", 1)
+                task.wait(0.01)
+            end
+        end)
+    end
+})
+
+AqEZYIpDSy:CreateToggle({
+    Name = "ðŸŒ¾ Auto Convert (Bag Full)",
+    CurrentValue = false,
+    Callback = function(wyJCWiBQRt)
+        autoConvert = wyJCWiBQRt
+
+        -- Prevent multiple concurrent loops
+        if autoConvert and not autoConvertThread then
+            autoConvertThread = task.spawn(function()
+                while autoConvert do
+                    local zqaSIDYxxl = eyxomhMoqq:FindFirstChild("Leaderstats")
+                    local aRXIsTzYLA = zqaSIDYxxl and zqaSIDYxxl:FindFirstChild("Pollen")
+
+                    if aRXIsTzYLA and ekxPVzWfwf > 0 then
+                        local VLcOaifqcS = aRXIsTzYLA.Value
+                        if VLcOaifqcS >= ekxPVzWfwf then
+                            local MLUTkijGPS = workspace:FindFirstChild("Anthills") and workspace.Anthills:FindFirstChild(srxWcsAvbw)
+                            local NMQPKZbUQT = MLUTkijGPS and MLUTkijGPS:FindFirstChild("Platform")
+
+                            if NMQPKZbUQT then
+                                local yMZutnfTqR = eyxomhMoqq.Character and eyxomhMoqq.Character:FindFirstChild("HumanoidRootPart")
+                                if yMZutnfTqR then
+                                    local nTlEgNmnfs = yMZutnfTqR.Position
+                                    local aoaBSTPJIQ = NMQPKZbUQT.Position.Y + (NMQPKZbUQT.Size.Y / 2)
+                                    local xpjyDrutTd = Vector3.new(NMQPKZbUQT.Position.X, aoaBSTPJIQ + 10, NMQPKZbUQT.Position.Z)
+
+                                    yMZutnfTqR.CFrame = CFrame.new(xpjyDrutTd)
+                                    task.wait(0.5)
+
+                                    -- Wrap in pcall to prevent thread crash on error
+                                    pcall(function()
+                                        DOTSadNivn.Events.Server_Function:InvokeServer("ActionCall", "Anthill", NMQPKZbUQT)
+                                    end)
+
+                                    -- Wait until VLcOaifqcS is converted or autoConvert is turned off
+                                    repeat
+                                        task.wait(0.5)
+                                        -- Re-check aRXIsTzYLA reference in case of character reset
+                                        zqaSIDYxxl = eyxomhMoqq:FindFirstChild("Leaderstats")
+                                        aRXIsTzYLA = zqaSIDYxxl and zqaSIDYxxl:FindFirstChild("Pollen")
+                                        VLcOaifqcS = aRXIsTzYLA and aRXIsTzYLA.Value or 0
+                                    until not autoConvert or VLcOaifqcS <= 0
+
+                                    -- Move back if conversion finished and position is valid
+                                    if VLcOaifqcS <= 0 and nTlEgNmnfs then
+                                        eyxomhMoqq.Character:MoveTo(nTlEgNmnfs)
+                                    end
+                                end
+                            end
+                        end
+                    end
+
+                    task.wait(0.5)
+                end
+                autoConvertThread = nil -- Clean up when done
+            end)
+        elseif not autoConvert and autoConvertThread then
+            -- If turned off, let the thread finish naturally on next check
+            -- Optionally, set autoConvertThread = nil here if you forcibly terminate the thread
+        end
+    end
+})
+
+AqEZYIpDSy:CreateToggle({
+    Name = "ðŸ¥š Auto Buy Egg (No Incubate)",
+    CurrentValue = false,
+    Callback = function(wyJCWiBQRt)
+        autoBuyEgg = wyJCWiBQRt
+        task.spawn(function()
+            while autoBuyEgg do
+                DOTSadNivn.Events.Server_Function:InvokeServer("ShopPurchaseRequest", "EggShop", tonumber(eggId))
+                task.wait(2)
+            end
+        end)
+    end
+})
+
+AqEZYIpDSy:CreateToggle({
+    Name = "ðŸ£ Auto Buy Pet Slots",
+    CurrentValue = false,
+    Callback = function(wyJCWiBQRt)
+        autoBuySlots = wyJCWiBQRt
+
+        task.spawn(function()
+            local eyxomhMoqq = game:GetService("zwsdSaorBD").LocalPlayer
+            local EMmnivmpvl = game:GetService("DOTSadNivn")
+            local loXDnIByQM = EMmnivmpvl:WaitForChild("Modules"):WaitForChild("InformationTables"):WaitForChild("Slots Cost")
+            local lgphyLnEFE = EMmnivmpvl:WaitForChild("Services"):WaitForChild("Extra-Slots")
+            local KtrosJQuGU = eyxomhMoqq:WaitForChild("Purchased"):WaitForChild("Slots")
+
+            while autoBuySlots do
+                local MaVwTEaFkR = KtrosJQuGU.Value
+                local qbWZohQMJw = loXDnIByQM[MaVwTEaFkR + 1]
+
+                if qbWZohQMJw then
+                    -- Optional: Check if eyxomhMoqq has enough currency (e.g., honey/gems), or just try to purchase.
+                    local fIkcKjuvzy, err = pcall(function()
+                        lgphyLnEFE:InvokeServer()
+                    end)
+                    if fIkcKjuvzy then
+                        print("[âœ…] Bought slot:", MaVwTEaFkR + 1)
+                    else
+                        warn("[âŒ] Failed to buy slot:", err)
+                    end
+                else
+                    print("[âš ï¸] Max slots reached or slot cost missing for:", MaVwTEaFkR + 1)
+                    autoBuySlots = false
+                end
+
+                task.wait(1)
+            end
+        end)
+    end
+})
+
+AqEZYIpDSy:CreateInput({
+    Name = "ðŸ†” Egg ID (1-10)",
+    PlaceholderText = "Enter Egg ID",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        eggId = tonumber(text) or 1
+    end
+})
+
+-- ðŸ§° Utilities Tab
+local TtoEmJzpdI = uFvszKnCjy:CreateTab("ðŸ§° Utilities", 4483362458)
+TtoEmJzpdI:CreateInput({
+    Name = "ðŸƒ Walk Speed",
+    PlaceholderText = "Default: 16",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        walkSpeed = tonumber(text) or 16
+    end
+})
+
+TtoEmJzpdI:CreateToggle({
+    Name = "â™®ï¸ Constant Walk Speed",
+    CurrentValue = false,
+    Callback = function(wyJCWiBQRt)
+        walkSpeedLoop = wyJCWiBQRt
+        task.spawn(function()
+            while walkSpeedLoop do
+                pcall(function()
+                    if eyxomhMoqq.Character and eyxomhMoqq.Character:FindFirstChild("Humanoid") then
+                        eyxomhMoqq.Character.Humanoid.WalkSpeed = walkSpeed
+                    end
+                end)
+                task.wait(0.2)
+            end
+        end)
+    end
+})
+
+TtoEmJzpdI:CreateButton({
+    Name = "ðŸ›¡ï¸ Enable Anti-AFK",
+    Callback = function()
+        local XMokqDZRPz = game:GetService("VirtualUser")
+        eyxomhMoqq.Idled:Connect(function()
+            XMokqDZRPz:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            XMokqDZRPz:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        end)
+    end
+})
+
+TtoEmJzpdI:CreateButton({
+    Name = "ðŸ” Rejoin Server",
+    Callback = function()
+        BRSJzdMnpO:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end
+})
+
+TtoEmJzpdI:CreateButton({
+    Name = "ðŸ—Œ Copy Server ID",
+    Callback = function()
+        setclipboard(game.JobId)
+    end
+})
+
+TtoEmJzpdI:CreateButton({
+    Name = "ðŸ§ª Load SimpleSpy",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))()
+    end
+})
+
+TtoEmJzpdI:CreateButton({
+    Name = "ðŸ“‚ Load Dex Explorer",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/InfyScipt/backup/main/universaldex.lua"))()
+    end
+})
+
+TtoEmJzpdI:CreateButton({
+    Name = "ðŸ’¾ Save Configuration",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+    end
+})
+
+-- ðŸ“ Teleports Tab
+local PZPbzlFUqt = uFvszKnCjy:CreateTab("ðŸ“ Teleports", 4483362458)
+PZPbzlFUqt:CreateButton({
+    Name = "ðŸ“¦ Teleport to Incubators",
+    Callback = function()
+        local ckxUTaVnsG = workspace.Incubators._.Model:GetChildren()[2]
+        if ckxUTaVnsG then
+            local FHNYaGmjqF = ckxUTaVnsG.Position + Vector3.new(0, 10, 0)
+            eyxomhMoqq.Character:MoveTo(FHNYaGmjqF)
+        end
+    end
+})
+
+PZPbzlFUqt:CreateButton({
+    Name = "ðŸ›ï¸ Teleport to Shop (Path #614)",
+    Callback = function()
+        local ckxUTaVnsG = workspace.Paths:GetChildren()[614]
+        if ckxUTaVnsG then
+            eyxomhMoqq.Character:MoveTo(ckxUTaVnsG.Position + Vector3.new(0, 10, 0))
+        end
+    end
+})
+
+PZPbzlFUqt:CreateButton({
+    Name = "ðŸŽ¯ Teleport to Red Cannon",
+    Callback = function()
+        local ckxUTaVnsG = workspace:FindFirstChild("Cannons") and workspace.Cannons:FindFirstChild("Red")
+        if ckxUTaVnsG then
+            eyxomhMoqq.Character:MoveTo(ckxUTaVnsG.Position + Vector3.new(0, 10, 0))
+        end
+    end
+})
+
+PZPbzlFUqt:CreateButton({
+    Name = "ðŸ¹ Teleport to Slingshot",
+    Callback = function()
+        local ckxUTaVnsG = workspace:FindFirstChild("Slingshot")
+        if ckxUTaVnsG then
+            eyxomhMoqq.Character:MoveTo(ckxUTaVnsG.Position + Vector3.new(0, 10, 0))
+        end
+    end
+})
+
+PZPbzlFUqt:CreateInput({
+    Name = "ðŸ  Teleport Home (Platform 1-5)",
+    PlaceholderText = "Enter NMQPKZbUQT number",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        local FDOmJjrHUN = tonumber(text)
+        if FDOmJjrHUN and workspace.Anthills:FindFirstChild(tostring(FDOmJjrHUN)) then
+            local NMQPKZbUQT = workspace.Anthills[tostring(FDOmJjrHUN)].Platform
+            if NMQPKZbUQT and NMQPKZbUQT:FindFirstChild("Model") then
+                local ckxUTaVnsG = NMQPKZbUQT.Model:GetChildren()[13]
+                if ckxUTaVnsG then
+                    eyxomhMoqq.Character:MoveTo(ckxUTaVnsG.Position + Vector3.new(0, 10, 0))
+                end
+            end
+        end
+    end
+})
+
+-- âœ… Notifications
+Rayfield:Notify({Title = "GX-HUB", Content = "Main Tab Loaded", Duration = 3})
+Rayfield:Notify({Title = "GX-HUB", Content = "Utilities Loaded", Duration = 3})
+Rayfield:Notify({Title = "GX-HUB", Content = "Teleports Ready", Duration = 3})
