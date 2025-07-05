@@ -96,44 +96,61 @@ mainTab:CreateToggle({
     CurrentValue = false,
     Callback = function(value)
         autoConvert = value
-        task.spawn(function()
-            while autoConvert do
-                local stats = player:FindFirstChild("Leaderstats")
-                local pollenStat = stats and stats:FindFirstChild("Pollen")
 
-                if pollenStat and userDefinedBagCap > 0 then
-                    local pollen = pollenStat.Value
-                    if pollen >= userDefinedBagCap then
-                        local anthill = workspace:WaitForChild("Anthills"):FindFirstChild(platformInput)
-                        local platform = anthill and anthill:FindFirstChild("Platform")
+        -- Prevent multiple concurrent loops
+        if autoConvert and not autoConvertThread then
+            autoConvertThread = task.spawn(function()
+                while autoConvert do
+                    local stats = player:FindFirstChild("Leaderstats")
+                    local pollenStat = stats and stats:FindFirstChild("Pollen")
 
-                        if platform then
-                            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                            if root then
-                                local savedPosition = root.Position
-                                local platformTop = platform.Position.Y + (platform.Size.Y / 2)
-                                local teleportPosition = Vector3.new(platform.Position.X, platformTop + 10, platform.Position.Z)
+                    if pollenStat and userDefinedBagCap > 0 then
+                        local pollen = pollenStat.Value
+                        if pollen >= userDefinedBagCap then
+                            local anthill = workspace:FindFirstChild("Anthills") and workspace.Anthills:FindFirstChild(platformInput)
+                            local platform = anthill and anthill:FindFirstChild("Platform")
 
-                                root.CFrame = CFrame.new(teleportPosition)
-                                task.wait(0.5)
+                            if platform then
+                                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                if root then
+                                    local savedPosition = root.Position
+                                    local platformTop = platform.Position.Y + (platform.Size.Y / 2)
+                                    local teleportPosition = Vector3.new(platform.Position.X, platformTop + 10, platform.Position.Z)
 
-                                ReplicatedStorage.Events.Server_Function:InvokeServer("ActionCall", "Anthill", platform)
+                                    root.CFrame = CFrame.new(teleportPosition)
+                                    task.wait(0.5)
 
-                                repeat task.wait(0.5)
-                                    pollen = pollenStat.Value
-                                until pollen <= 0 or not autoConvert
+                                    -- Wrap in pcall to prevent thread crash on error
+                                    pcall(function()
+                                        ReplicatedStorage.Events.Server_Function:InvokeServer("ActionCall", "Anthill", platform)
+                                    end)
 
-                                if pollen <= 0 and savedPosition then
-                                    player.Character:MoveTo(savedPosition)
+                                    -- Wait until pollen is converted or autoConvert is turned off
+                                    repeat
+                                        task.wait(0.5)
+                                        -- Re-check pollenStat reference in case of character reset
+                                        stats = player:FindFirstChild("Leaderstats")
+                                        pollenStat = stats and stats:FindFirstChild("Pollen")
+                                        pollen = pollenStat and pollenStat.Value or 0
+                                    until not autoConvert or pollen <= 0
+
+                                    -- Move back if conversion finished and position is valid
+                                    if pollen <= 0 and savedPosition then
+                                        player.Character:MoveTo(savedPosition)
+                                    end
                                 end
                             end
                         end
                     end
-                end
 
-                task.wait(0.5)
-            end
-        end)
+                    task.wait(0.5)
+                end
+                autoConvertThread = nil -- Clean up when done
+            end)
+        elseif not autoConvert and autoConvertThread then
+            -- If turned off, let the thread finish naturally on next check
+            -- Optionally, set autoConvertThread = nil here if you forcibly terminate the thread
+        end
     end
 })
 
