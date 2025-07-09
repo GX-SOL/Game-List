@@ -1,0 +1,54 @@
+-- Load Rayfield UI
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local player = game:GetService("Players").LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local collecting = false
+
+-- Rayfield Window
+local Window = Rayfield:CreateWindow({
+    Name = "Luzer Game - Auto Touch Collector",
+    LoadingTitle = "Touching HITPARTs...",
+    LoadingSubtitle = "Collecting via Touch",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+-- Tab + Toggle
+local MainTab = Window:CreateTab("Main", 4483362458)
+MainTab:CreateToggle({
+    Name = "Auto Touch Collect (All Plots)",
+    CurrentValue = false,
+    Callback = function(state)
+        collecting = state
+    end
+})
+
+-- Main loop: Simulate touch for each HITPART
+task.spawn(function()
+    while true do
+        if collecting then
+            for i = 1, 8 do
+                local plot = workspace:WaitForChild("Main"):WaitForChild("Plots"):FindFirstChild(tostring(i))
+                if plot then
+                    local items = plot:FindFirstChild("Items")
+                    if items then
+                        for _, item in pairs(items:GetChildren()) do
+                            local hitPart = item:FindFirstChild("HITPART")
+                            if hitPart and hitPart:IsA("BasePart") then
+                                pcall(function()
+                                    firetouchinterest(rootPart, hitPart, 0)
+                                    firetouchinterest(rootPart, hitPart, 1)
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
