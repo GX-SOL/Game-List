@@ -1,0 +1,266 @@
+local YdUuOlwL = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local VzxCBgKr = YdUuOlwL:CreateWindow({
+   Name = "Forge Master",
+   LoadingTitle = "Forge Master",
+   LoadingSubtitle = "by Luzer",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "ForgeMasterUI",
+      FileName = "Settings"
+   },
+   Discord = {
+      Enabled = false
+   },
+   KeySystem = true,
+   KeySettings = {
+      Title = "Forge Master Key System",
+      Subtitle = "Enter your key to continue",
+      Note = "Key: 12345",
+      SaveKey = true,
+      Key = {"12345"}
+   }
+})
+
+local MJzhIg = VzxCBgKr:CreateTab("⚙️ Forge", 4483362458)
+local CsjTmbgf = VzxCBgKr:CreateTab("⛏️ Ores", 4483362458)
+local cbDRKq = VzxCBgKr:CreateTab("👷 Workers", 4483362458)
+
+local SjqvOAp = game:GetService("ReplicatedStorage")
+local oNEHKvbq = SjqvOAp:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
+local tbWdGS = game:GetService("Players").LocalPlayer
+local KODZvhr = game:GetService("Workspace")
+
+local CnDGvP = false
+local vAKDeOD = false
+local CQFpsEqI = false
+local URumQLD = false
+local sTxqOhIJ = false
+local xevYFx = false
+local dFaJtCH = false
+
+local function fmuLMAb()
+   local rSYgBwz
+   for _,XMgIKvx in tbWdGS.Backpack:GetChildren() do
+      if string.find(XMgIKvx.Name,"Ore") then
+         rSYgBwz = XMgIKvx:GetAttribute("Id")
+      end
+   end
+   if not rSYgBwz then return end
+   local HmrVEC = oNEHKvbq.ForgeService.RF.GetForgeData:InvokeServer(tbWdGS)
+   if HmrVEC and not HmrVEC.Smelting[1] then
+      for i = 1, HmrVEC.SpaceUpgrade do
+         oNEHKvbq.ForgeService.RF.Smelt:InvokeServer(rSYgBwz)
+      end
+   end
+end
+
+local function OsvyXgEN()
+   local dqRJvQlo = oNEHKvbq.ForgeService.RF.GetForgeData:InvokeServer(tbWdGS)
+   if dqRJvQlo and dqRJvQlo.Smelting[1] then
+      for _, QNVAlwf in pairs(dqRJvQlo.Smelting) do
+         if QNVAlwf.Smelted then
+            oNEHKvbq.ForgeService.RF.PickSmeltedItem:InvokeServer(QNVAlwf.ItemId)
+         end
+      end
+   end
+end
+
+local function zvjLWlZ()
+   oNEHKvbq.AnvilService.RF.Hammer:InvokeServer("Perfect", true)
+end
+
+local function MgzAKWY()
+   oNEHKvbq.SellStoreService.RF.SellAll:InvokeServer()
+end
+
+local function LxaVtxP(a)
+   local j = a:IsA("ProximityPrompt") and a or a:FindFirstChildOfClass("ProximityPrompt")
+   if j then fireproximityprompt(j) end
+end
+
+MJzhIg:CreateToggle({
+   Name = "Auto Smelt",
+   CurrentValue = false,
+   Callback = function(k)
+      CnDGvP = k
+      if k then
+         task.spawn(function()
+            while CnDGvP do
+               fmuLMAb()
+               task.wait(1)
+            end
+         end)
+      end
+   end
+})
+
+MJzhIg:CreateToggle({
+   Name = "Auto Pick Smelted",
+   CurrentValue = false,
+   Callback = function(k)
+      vAKDeOD = k
+      if k then
+         task.spawn(function()
+            while vAKDeOD do
+               OsvyXgEN()
+               task.wait(1)
+            end
+         end)
+      end
+   end
+})
+
+MJzhIg:CreateToggle({
+   Name = "Auto Sell",
+   CurrentValue = false,
+   Callback = function(k)
+      CQFpsEqI = k
+      if k then
+         task.spawn(function()
+            while CQFpsEqI do
+               MgzAKWY()
+               task.wait(5)
+            end
+         end)
+      end
+   end
+})
+
+MJzhIg:CreateToggle({
+   Name = "Auto Hammer",
+   CurrentValue = false,
+   Callback = function(k)
+      URumQLD = k
+      if k then
+         task.spawn(function()
+            while URumQLD do
+               zvjLWlZ()
+               task.wait(0.1)
+            end
+         end)
+      end
+   end
+})
+
+MJzhIg:CreateButton({
+   Name = "Sell All Now",
+   Callback = MgzAKWY
+})
+
+cbDRKq:CreateToggle({
+   Name = "Auto Anvil (Prompt)",
+   CurrentValue = false,
+   Callback = function(k)
+      sTxqOhIJ = k
+      if k then
+         task.spawn(function()
+            while sTxqOhIJ do
+               for _, v in pairs(KODZvhr.Plots:GetChildren()) do
+                  local p = v:FindFirstChild("PlotAssets") and v.PlotAssets:FindFirstChild("Anvil")
+                  if p then LxaVtxP(p) end
+               end
+               wait(0.5)
+            end
+         end)
+      end
+   end
+})
+
+cbDRKq:CreateToggle({
+   Name = "Auto Water (Prompt)",
+   CurrentValue = false,
+   Callback = function(k)
+      xevYFx = k
+      if k then
+         task.spawn(function()
+            while xevYFx do
+               for _, v in pairs(KODZvhr.Plots:GetChildren()) do
+                  local p = v:FindFirstChild("PlotAssets") and v.PlotAssets:FindFirstChild("Bucket")
+                  local t = p and p:FindFirstChild("Temper")
+                  if t then LxaVtxP(t) end
+               end
+               wait(0.5)
+            end
+         end)
+      end
+   end
+})
+
+local function LLMHOuW(speed)
+   for _, v in pairs(KODZvhr.Plots:GetChildren()) do
+      for _, d in pairs(v:GetDescendants()) do
+         local h = d:FindFirstChildOfClass("Humanoid")
+         if h then h.WalkSpeed = speed end
+      end
+   end
+end
+
+cbDRKq:CreateToggle({
+   Name = "Fast Workers (Speed 99)",
+   CurrentValue = false,
+   Callback = function(k)
+      dFaJtCH = k
+      if k then
+         task.spawn(function()
+            while dFaJtCH do
+               LLMHOuW(99)
+               wait(1)
+            end
+         end)
+      else
+         LLMHOuW(16)
+      end
+   end
+})
+
+local FzWoLdq = {
+   {name = "Iron", path = "IronOre"},
+   {name = "Copper", path = "CopperOre"},
+   {name = "Tin", path = "TinOre"},
+   {name = "Silver", path = "SilverOre"},
+   {name = "Gold", path = "GoldOre"},
+   {name = "Obsidian", path = "ObsidianOre"},
+   {name = "Mythril", path = "MythrilOre"},
+   {name = "Diamond", path = "DiamondOre"},
+   {name = "Emerald", path = "EmeraldOre"},
+   {name = "Voidstone", path = "VoidstoneOre"},
+   {name = "Cyber", path = "CyberOre"},
+   {name = "Spacedust", path = "SpaceDustOre"},
+   {name = "Damascus", path = "DamascusOre"},
+   {name = "Stellarite", path = "StellariteOre"}
+}
+
+local function nShQRHL(id)
+   oNEHKvbq.MaterialStoreService.RF.PurchaseMaterial:InvokeServer(id, "Credits")
+end
+
+local function pRhDIsA()
+   local g = tbWdGS:WaitForChild("PlayerGui")
+   local s = g:FindFirstChild("Menu") and g.Menu:FindFirstChild("MaterialStore")
+   if not s then return end
+   local content = s:FindFirstChild("background") and s.background:FindFirstChild("FrameFix") and s.background.FrameFix:FindFirstChild("content")
+   if not content then return end
+
+   for _, o in ipairs(FzWoLdq) do
+      local f = content:FindFirstChild(o.path)
+      if f and f:FindFirstChild("Ore") and f.Ore:FindFirstChild("StockAmount") then
+         local stock = tonumber(f.Ore.StockAmount.Text:match("%d+")) or 0
+         if stock > 0 then
+            CsjTmbgf:CreateButton({
+               Name = "Buy " .. o.name,
+               Callback = function()
+                  nShQRHL(o.path)
+               end
+            })
+         end
+      end
+   end
+end
+
+CsjTmbgf:CreateParagraph({
+   Title = "Auto Buy Ores",
+   Content = "Open MaterialStore GUI before using this."
+})
+
+task.delay(2, pRhDIsA)
