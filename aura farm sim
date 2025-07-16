@@ -87,13 +87,12 @@ local hatching = false
 -- Define your egg presets here
 local eggRemotes = {
     [1] = { "Grassy", 3, "Desert", "Aura" },
-    [2] = { "GrassyElite", 1, "Desert", "Aura" },
+    [2] = { "GrassyElite", 3, "Desert", "Aura" },
     [3] = { "Desert", 3, "Snowy", "Aura" },
     [4] = { "DesertElite", 3, "Snowy", "Aura" },
-    -- Add more like:
-    -- [5] = { "Crystal", 3, "Mystic", "Aura" },
-    -- ...
-    -- up to [20]
+    [5] = { "Snowy", 3, "Lava", "Aura" },
+    [6] = { "SnowyElite", 3, "Lava", "Aura" },
+    -- up to [20] reserved
 }
 
 eggTab:CreateInput({
