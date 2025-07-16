@@ -1,0 +1,161 @@
+-- Rayfield UI | Auto Clicker + Auto Rebirth + Auto Egg via Input
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "⚡ Auto Click | Rebirth | Egg | Luzer Game",
+    LoadingTitle = "Launching UI...",
+    LoadingSubtitle = "Rayfield by Sirius",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "LuzerHub",
+        FileName = "MainUIConfig"
+    },
+    KeySystem = false
+})
+
+------------------------------------------------------------
+-- 🖱️ AUTO CLICKER TAB
+------------------------------------------------------------
+local clickTab = Window:CreateTab("🖱️ Auto Clicker", 4483362458)
+local clicking = false
+
+clickTab:CreateToggle({
+    Name = "Enable Auto Clicker (Fast)",
+    CurrentValue = false,
+    Flag = "AutoClick",
+    Callback = function(val)
+        clicking = val
+        task.spawn(function()
+            while clicking do
+                game:GetService("ReplicatedStorage").Remotes.Click:FireServer(true)
+                task.wait(0.01)
+            end
+        end)
+    end
+})
+
+------------------------------------------------------------
+-- 🔁 AUTO REBIRTH TAB
+------------------------------------------------------------
+local rebirthTab = Window:CreateTab("🔁 Auto Rebirth", 4483365704)
+
+local rebirthAmount = 8
+local rebirthing = false
+
+rebirthTab:CreateInput({
+    Name = "Set Rebirth Amount (1–30)",
+    PlaceholderText = "e.g. 8",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num and num >= 1 and num <= 30 then
+            rebirthAmount = num
+        else
+            Rayfield:Notify({
+                Title = "Invalid Input",
+                Content = "Please enter a number between 1 and 30.",
+                Duration = 3
+            })
+        end
+    end
+})
+
+rebirthTab:CreateToggle({
+    Name = "Enable Auto Rebirth",
+    CurrentValue = false,
+    Flag = "AutoRebirth",
+    Callback = function(state)
+        rebirthing = state
+        task.spawn(function()
+            while rebirthing do
+                local args = { [1] = rebirthAmount }
+                game:GetService("ReplicatedStorage").Remotes.UpdateRebirths:FireServer(unpack(args))
+                task.wait(1.5)
+            end
+        end)
+    end
+})
+
+------------------------------------------------------------
+-- 🥚 AUTO EGG TAB (via Input ID 1–20)
+------------------------------------------------------------
+local eggTab = Window:CreateTab("🥚 Auto Egg Hatch", 4483367440)
+
+local eggChoice = 1
+local hatching = false
+
+-- Define your egg presets here
+local eggRemotes = {
+    [1] = { "Grassy", 3, "Desert", "Aura" },
+    [2] = { "GrassyElite", 1, "Desert", "Aura" },
+    [3] = { "Desert", 3, "Snowy", "Aura" },
+    [4] = { "DesertElite", 3, "Snowy", "Aura" },
+    -- Add more like:
+    -- [5] = { "Crystal", 3, "Mystic", "Aura" },
+    -- ...
+    -- up to [20]
+}
+
+eggTab:CreateInput({
+    Name = "Select Egg ID (1–20)",
+    PlaceholderText = "e.g. 3",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local index = tonumber(text)
+        if index and eggRemotes[index] then
+            eggChoice = index
+        else
+            Rayfield:Notify({
+                Title = "Invalid Egg ID",
+                Content = "Must be number between 1 and available preset.",
+                Duration = 3
+            })
+        end
+    end
+})
+
+eggTab:CreateToggle({
+    Name = "Enable Auto Hatch (Based on Egg ID)",
+    CurrentValue = false,
+    Flag = "AutoEgg",
+    Callback = function(state)
+        hatching = state
+        task.spawn(function()
+            while hatching do
+                local args = eggRemotes[eggChoice]
+                if args then
+                    game:GetService("ReplicatedStorage").Remotes.OpenCard:FireServer(unpack(args))
+                end
+                task.wait(0.5)
+            end
+        end)
+    end
+})
+
+------------------------------------------------------------
+-- 🧰 UTILITIES TAB
+------------------------------------------------------------
+local utilTab = Window:CreateTab("🧰 Utilities", 4483367440)
+
+utilTab:CreateButton({
+    Name = "Enable Anti-AFK",
+    Callback = function()
+        local vu = game:GetService("VirtualUser")
+        game:GetService("Players").LocalPlayer.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        end)
+        Rayfield:Notify({
+            Title = "Anti-AFK",
+            Content = "You're now protected from idle kick.",
+            Duration = 4
+        })
+    end
+})
+
+------------------------------------------------------------
+-- 💾 CONFIG
+------------------------------------------------------------
+Window:CreateTab("💾 Config", 4483363011)
+Rayfield:LoadConfiguration()
