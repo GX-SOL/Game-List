@@ -94,7 +94,9 @@ local eggRemotes = {
     [6] = { "SnowyElite", 3, "Lava", "Aura" },
     [7] = { "Lava", 3, "Dungeon", "Aura" },
     [8] = { "LavaElite", 3, "Dungeon", "Aura" },
-    -- [9] to [20] slots available for more
+    [9] = { "Dungeon", 3, "Hero City", "Aura" },
+    [10] = { "DungeonElite", 3, "Hero City", "Aura" },
+    -- [11] to [20] ready for future use
 }
 
 eggTab:CreateInput({
