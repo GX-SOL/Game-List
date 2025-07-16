@@ -2,9 +2,9 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "⚡ Auto Click | Rebirth | Egg | Luzer Game",
+    Name = "👑 GX-HUB | Luzer Gamer",
     LoadingTitle = "Launching UI...",
-    LoadingSubtitle = "Rayfield by Sirius",
+    LoadingSubtitle = "WELCOME TO MY HUB😝",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "LuzerHub",
