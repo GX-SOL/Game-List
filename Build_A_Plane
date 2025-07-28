@@ -1,0 +1,108 @@
+local __xFzq7__=loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local __w8Jh__=game:GetService("ReplicatedStorage")
+local __sP0l__=game:GetService("Players")
+local __gGv__=game:GetService("TeleportService")
+local __QxP__=__sP0l__.LocalPlayer
+local __u98z__=__w8Jh__:WaitForChild("Remotes"):WaitForChild("LaunchEvents"):WaitForChild("Launch")
+local __rRZ__=__w8Jh__:WaitForChild("Remotes"):WaitForChild("LaunchEvents"):WaitForChild("Return")
+local __yYk3__=__w8Jh__:WaitForChild("Remotes"):WaitForChild("ShopEvents"):WaitForChild("BuyBlock")
+
+getgenv()._U_A1=false
+getgenv()._U_B2=false
+
+local __fakeList__={"block_1","wing_1","fuel_1","propeller_1","seat_1","fuel_2","wing_2","fuel_3","propeller_2","balloon","boost_1","missile_1","shield"}
+local ___UI___=__xFzq7__:CreateWindow({Name="\240\159\140\140 GX-HUB",LoadingTitle="Preparing Tools...",LoadingSubtitle="by Luzer Game x GX-SOL",ConfigurationSaving={Enabled=false},Discord={Enabled=false},KeySystem=false})
+local __T_M__=___UI___:CreateTab("\240\159\155\128 Auto Features",4483362458)
+
+__T_M__:CreateToggle({
+Name="\240\159\148\129 Enable Auto Farm",
+CurrentValue=false,
+Flag="toggle_af",
+Callback=function(__ON__)
+    _U_A1=__ON__
+    task.spawn(function()
+        while _U_A1 do
+            local __CH__=__QxP__.Character or __QxP__.CharacterAdded:Wait()
+            __u98z__:FireServer()
+            task.wait(1)
+
+            if __CH__ and __CH__:FindFirstChild("HumanoidRootPart") then
+                local __junk1__=12345+67890  -- dummy
+                __CH__.HumanoidRootPart.CFrame=CFrame.new(9e18,9e19,9e18)
+            end
+
+            local __nonsense__="ignore_this"
+            task.wait(1)
+            __rRZ__:FireServer()
+            task.wait(2)
+        end
+    end)
+end
+})
+
+__T_M__:CreateToggle({
+Name="\240\159\146\184 Auto Buy All Items",
+CurrentValue=false,
+Flag="toggle_ab",
+Callback=function(__ON__)
+    _U_B2=__ON__
+    task.spawn(function()
+        while _U_B2 do
+            for __i__,__itm__ in ipairs(__fakeList__) do
+                local __junk2__=(1+1)*2  -- dummy
+                __yYk3__:FireServer(__itm__)
+                task.wait(0.1)
+            end
+            task.wait(1)
+        end
+    end)
+end
+})
+
+local __UTIL__=___UI___:CreateTab("\226\154\129 Utilities",4483345998)
+
+__UTIL__:CreateButton({
+Name="\240\159\148\129 Rejoin Server",
+Callback=function()
+    local __id__=game.PlaceId
+    __gGv__:Teleport(__id__,__QxP__)
+end
+})
+
+__UTIL__:CreateButton({
+Name="\240\159\146\128 Reset Character",
+Callback=function()
+    __QxP__:LoadCharacter()
+end
+})
+
+__UTIL__:CreateButton({
+Name="\240\159\148\161 Enable Anti-AFK",
+Callback=function()
+    __xFzq7__:Notify({Title="Anti-AFK",Content="You are protected from idle kick!",Duration=4})
+    local __VUser__=game:service("VirtualUser")
+    __QxP__.Idled:Connect(function()
+        __VUser__:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        __VUser__:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    end)
+end
+})
+
+local __MISC__=___UI___:CreateTab("\240\159\167\185 Misc",4483346298)
+__MISC__:CreateButton({
+Name="\226\156\136 Close UI",
+Callback=function()
+    __xFzq7__:Destroy()
+end
+})
+
+local __CRED__=___UI___:CreateTab("\240\159\147\153 Credits",4483361974)
+__CRED__:CreateParagraph({Title="Made By",Content="Luzer Game x GX-SOL"})
+__CRED__:CreateParagraph({Title="UI Framework",Content="Rayfield UI - Sirius Edition"})
+
+__xFzq7__:Notify({
+Title="GX UI Ready \226\156\168",
+Content="AutoFarm and AutoBuy now available!",
+Duration=5
+})
