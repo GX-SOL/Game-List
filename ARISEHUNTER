@@ -1,96 +1,85 @@
---// Enemy Auto Farm (TP)
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local char = player.Character or player.CharacterAdded:Wait()
-local hrp = char:WaitForChild("HumanoidRootPart")
+-- // Rayfield UI Loader
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local enemyFolder = workspace:WaitForChild("Enemys")
+local Window = Rayfield:CreateWindow({
+    Name = "Auto Farm Hub",
+    LoadingTitle = "Auto Farm | Sirius Rayfield",
+    LoadingSubtitle = "by LG",
+    ConfigurationSaving = {
+       Enabled = true,
+       FolderName = nil,
+       FileName = "AutoFarmConfig"
+    },
+    KeySystem = false
+})
 
-local farming = false
-local selectedEnemyName = nil
-local currentEnemy = nil
+-- // Variables
+local selectedEnemy = nil
+local autoFarm = false
+local player = game.Players.LocalPlayer
+local hrp = player.Character:WaitForChild("HumanoidRootPart")
 
---// Function to get all enemies of selected type
-local function getEnemiesByName(name)
-    local results = {}
-    for _, enemy in ipairs(enemyFolder:GetChildren()) do
-        if enemy:FindFirstChild("HumanoidRootPart") and enemy.Name == name then
-            table.insert(results, enemy)
-        end
-    end
-    return results
-end
+-- // Tab & Section
+local MainTab = Window:CreateTab("Main", 4483362458)
+local MainSection = MainTab:CreateSection("Auto Farm")
 
---// Function to teleport
-local function tpToEnemy(enemy)
-    if hrp and enemy and enemy:FindFirstChild("HumanoidRootPart") then
-        hrp.CFrame = enemy.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-    end
-end
-
---// Auto farm loop
-task.spawn(function()
-    while task.wait(0.5) do
-        if farming and selectedEnemyName then
-            if not currentEnemy or not currentEnemy.Parent or (currentEnemy:FindFirstChild("HumanoidRootPart") == nil) then
-                -- Find a new enemy
-                local enemies = getEnemiesByName(selectedEnemyName)
-                if #enemies > 0 then
-                    currentEnemy = enemies[1]
-                    tpToEnemy(currentEnemy)
-                end
-            else
-                -- Stay near current enemy until it dies
-                if currentEnemy:FindFirstChild("HumanoidRootPart") then
-                    local healthLabel = currentEnemy.HumanoidRootPart:FindFirstChild("EnemyNameGui")
-                        and currentEnemy.HumanoidRootPart.EnemyNameGui:FindFirstChild("Progress")
-                        and currentEnemy.HumanoidRootPart.EnemyNameGui.Progress:FindFirstChild("HealthNum")
-
-                    if healthLabel and tonumber(healthLabel.Text) and tonumber(healthLabel.Text) <= 0 then
-                        currentEnemy = nil -- Enemy dead, look for new one
-                    end
-                else
-                    currentEnemy = nil -- Enemy disappeared
-                end
-            end
-        end
-    end
-end)
-
---// UI buttons (example)
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
-local Window = library:MakeWindow({Name = "Auto Farm TP", HidePremium = false, SaveConfig = true})
-
-local FarmTab = Window:MakeTab({Name = "Farm", Icon = "rbxassetid://4483345998", PremiumOnly = false})
-
-FarmTab:AddDropdown({
+-- Dropdown for selecting enemy
+local enemyDropdown = MainTab:CreateDropdown({
     Name = "Select Enemy",
-    Default = "",
     Options = {},
-    Callback = function(enemyName)
-        selectedEnemyName = enemyName
-        currentEnemy = nil -- reset
-    end    
+    CurrentOption = {},
+    Flag = "EnemyDropdown",
+    Callback = function(Option)
+        selectedEnemy = Option[1]
+    end,
 })
 
-FarmTab:AddToggle({
-    Name = "Auto Farm",
-    Default = false,
-    Callback = function(state)
-        farming = state
-        currentEnemy = nil -- reset when toggling
-    end    
-})
-
-FarmTab:AddButton({
-    Name = "Refresh Enemies",
+-- Refresh button for enemy list
+MainTab:CreateButton({
+    Name = "Refresh Enemy List",
     Callback = function()
-        local names = {}
-        for _, enemy in ipairs(enemyFolder:GetChildren()) do
-            if not table.find(names, enemy.Name) then
-                table.insert(names, enemy.Name)
+        local list = {}
+        for _, enemy in pairs(workspace.Enemys:GetChildren()) do
+            if enemy:FindFirstChild("HumanoidRootPart") then
+                table.insert(list, enemy.Name)
             end
         end
-        FarmTab:UpdateDropdown("Select Enemy", names)
-    end
+        enemyDropdown:Set(list)
+    end,
+})
+
+-- Auto Farm Toggle
+MainTab:CreateToggle({
+    Name = "Auto Farm (TP)",
+    CurrentValue = false,
+    Flag = "AutoFarm",
+    Callback = function(Value)
+        autoFarm = Value
+        if autoFarm then
+            task.spawn(function()
+                while autoFarm and selectedEnemy do
+                    -- Find enemy of selected type
+                    local enemy = nil
+                    for _, e in pairs(workspace.Enemys:GetChildren()) do
+                        if e.Name == selectedEnemy and e:FindFirstChild("HumanoidRootPart") and e:FindFirstChild("Humanoid") and e.Humanoid.Health > 0 then
+                            enemy = e
+                            break
+                        end
+                    end
+
+                    if enemy then
+                        -- TP once to enemy
+                        hrp.CFrame = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+
+                        -- Wait for enemy to die
+                        repeat
+                            task.wait(0.2)
+                        until enemy == nil or not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 or autoFarm == false
+                    else
+                        task.wait(0.5)
+                    end
+                end
+            end)
+        end
+    end,
 })
