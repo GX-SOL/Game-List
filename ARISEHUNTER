@@ -1,0 +1,96 @@
+--// Enemy Auto Farm (TP)
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+
+local enemyFolder = workspace:WaitForChild("Enemys")
+
+local farming = false
+local selectedEnemyName = nil
+local currentEnemy = nil
+
+--// Function to get all enemies of selected type
+local function getEnemiesByName(name)
+    local results = {}
+    for _, enemy in ipairs(enemyFolder:GetChildren()) do
+        if enemy:FindFirstChild("HumanoidRootPart") and enemy.Name == name then
+            table.insert(results, enemy)
+        end
+    end
+    return results
+end
+
+--// Function to teleport
+local function tpToEnemy(enemy)
+    if hrp and enemy and enemy:FindFirstChild("HumanoidRootPart") then
+        hrp.CFrame = enemy.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+    end
+end
+
+--// Auto farm loop
+task.spawn(function()
+    while task.wait(0.5) do
+        if farming and selectedEnemyName then
+            if not currentEnemy or not currentEnemy.Parent or (currentEnemy:FindFirstChild("HumanoidRootPart") == nil) then
+                -- Find a new enemy
+                local enemies = getEnemiesByName(selectedEnemyName)
+                if #enemies > 0 then
+                    currentEnemy = enemies[1]
+                    tpToEnemy(currentEnemy)
+                end
+            else
+                -- Stay near current enemy until it dies
+                if currentEnemy:FindFirstChild("HumanoidRootPart") then
+                    local healthLabel = currentEnemy.HumanoidRootPart:FindFirstChild("EnemyNameGui")
+                        and currentEnemy.HumanoidRootPart.EnemyNameGui:FindFirstChild("Progress")
+                        and currentEnemy.HumanoidRootPart.EnemyNameGui.Progress:FindFirstChild("HealthNum")
+
+                    if healthLabel and tonumber(healthLabel.Text) and tonumber(healthLabel.Text) <= 0 then
+                        currentEnemy = nil -- Enemy dead, look for new one
+                    end
+                else
+                    currentEnemy = nil -- Enemy disappeared
+                end
+            end
+        end
+    end
+end)
+
+--// UI buttons (example)
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
+local Window = library:MakeWindow({Name = "Auto Farm TP", HidePremium = false, SaveConfig = true})
+
+local FarmTab = Window:MakeTab({Name = "Farm", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+
+FarmTab:AddDropdown({
+    Name = "Select Enemy",
+    Default = "",
+    Options = {},
+    Callback = function(enemyName)
+        selectedEnemyName = enemyName
+        currentEnemy = nil -- reset
+    end    
+})
+
+FarmTab:AddToggle({
+    Name = "Auto Farm",
+    Default = false,
+    Callback = function(state)
+        farming = state
+        currentEnemy = nil -- reset when toggling
+    end    
+})
+
+FarmTab:AddButton({
+    Name = "Refresh Enemies",
+    Callback = function()
+        local names = {}
+        for _, enemy in ipairs(enemyFolder:GetChildren()) do
+            if not table.find(names, enemy.Name) then
+                table.insert(names, enemy.Name)
+            end
+        end
+        FarmTab:UpdateDropdown("Select Enemy", names)
+    end
+})
