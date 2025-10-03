@@ -1,0 +1,555 @@
+local PLACE_ID = tostring(game.PlaceId or 0)
+local MAX_PAGES, PAGE_LIMIT = 30, 100
+local POLITE_WAIT, RETRY_BASE, RETRY_MAX = 0.18, 3, 60
+local CACHE_TTL = 8
+local SAVE_FILENAME = "ServerHopPro_Save.json"
+local SELF_FILENAME = "ServerHopPro_Self.lua"
+local LOG_FILENAME = "ServerHopPro_Log.txt"
+local VERSION = "1.2.0"
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local VirtualUser = game:GetService("VirtualUser")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local has_writefile = type(writefile) == "function"
+local has_readfile = type(readfile) == "function"
+local has_isfile = type(isfile) == "function"
+local has_setclipboard = type(setclipboard) == "function"
+local queue_on_teleport_fn = queue_on_teleport or (syn and syn.queue_on_teleport) or nil
+
+local function safe_write(path, content)
+    if not has_writefile then return false end
+    local ok,err = pcall(function() writefile(path, content) end)
+    if not ok then return false, err end
+    return true
+end
+
+local function safe_read(path)
+    if not has_readfile or not has_isfile then return nil end
+    if not isfile(path) then return nil end
+    local ok,content = pcall(function() return readfile(path) end)
+    if ok then return content end
+    return nil
+end
+
+local function log(s)
+    local ts = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    local line = ("[%s] %s\n"):format(ts, tostring(s))
+    if has_writefile then
+        local cur = ""
+        if has_readfile and has_isfile and isfile(LOG_FILENAME) then cur = readfile(LOG_FILENAME) or "" end
+        pcall(function() writefile(LOG_FILENAME, cur .. line) end)
+    end
+    pcall(function() print("[ServerHopPro] "..tostring(s)) end)
+end
+
+getgenv().ServerHopPro = getgenv().ServerHopPro or {
+    version = VERSION,
+    slots = {},
+    history = {},
+    blacklist = {},
+    settings = {
+        mode = "Oldest",
+        minPlayers = 0,
+        skipFullThreshold = 0,
+        maxRetries = 0,
+        ageThresholdSec = 0,
+        teleportTimeout = 18,
+        backoffBase = 3,
+        backoffMax = 60,
+        autoSaveOnJoin = false,
+        exportToClipboard = true,
+        webhookURL = "",
+        AutoHop = false,
+        AutoRejoin = false
+    },
+    lastAttempt = nil
+}
+
+local function persist_save()
+    if not has_writefile then return false end
+    local ok,err = pcall(function() writefile(SAVE_FILENAME, HttpService:JSONEncode(getgenv().ServerHopPro)) end)
+    if not ok then log("persist_save err: "..tostring(err)) end
+    return ok
+end
+
+local function persist_load()
+    if not has_readfile or not has_isfile then return false end
+    if not isfile(SAVE_FILENAME) then return false end
+    local ok,content = pcall(function() return readfile(SAVE_FILENAME) end)
+    if not ok or not content then return false end
+    local ok2,decoded = pcall(function() return HttpService:JSONDecode(content) end)
+    if not ok2 or type(decoded) ~= "table" then return false end
+    for k,v in pairs(decoded) do getgenv().ServerHopPro[k] = v end
+    return true
+end
+
+persist_load()
+
+local function export_state()
+    local txt = HttpService:JSONEncode(getgenv().ServerHopPro)
+    if has_writefile then
+        local name = "ServerHopPro_Export_"..tostring(os.time())..".json"
+        pcall(function() writefile(name, txt) end)
+        log("Exported saves to "..name)
+        return true, "Saved to "..name
+    elseif has_setclipboard and getgenv().ServerHopPro.settings.exportToClipboard then
+        pcall(function() setclipboard(txt) end)
+        log("Export copied to clipboard")
+        return true, "Copied to clipboard"
+    end
+    return false, "No writefile/clipboard"
+end
+
+local function import_state(jsonText)
+    local ok,decoded = pcall(function() return HttpService:JSONDecode(jsonText) end)
+    if not ok or type(decoded) ~= "table" then return false, "Invalid JSON" end
+    for k,v in pairs(decoded) do getgenv().ServerHopPro[k] = v end
+    pcall(persist_save)
+    return true, "Imported"
+end
+
+local function add_history(jobId)
+    jobId = tostring(jobId)
+    table.insert(getgenv().ServerHopPro.history, 1, { id = jobId, ts = os.time() })
+    while #getgenv().ServerHopPro.history > 100 do table.remove(getgenv().ServerHopPro.history) end
+    pcall(persist_save)
+end
+
+local function add_blacklist(jobId, reason)
+    jobId = tostring(jobId)
+    getgenv().ServerHopPro.blacklist[jobId] = { reason = tostring(reason or ""), ts = os.time() }
+    pcall(persist_save)
+end
+
+local function is_blacklisted(jobId)
+    if not jobId then return false end
+    return getgenv().ServerHopPro.blacklist[tostring(jobId)] ~= nil
+end
+
+local cache = { ts = 0, pages = nil }
+
+local function fetch_page(placeId, cursor)
+    local url = ("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=%d"):format(placeId, PAGE_LIMIT)
+    if cursor and cursor ~= "" then url = url .. "&cursor=" .. HttpService:UrlEncode(cursor) end
+    local ok,body = pcall(function() return game:HttpGet(url) end)
+    if not ok then return nil, tostring(body) end
+    local ok2, parsed = pcall(function() return HttpService:JSONDecode(body) end)
+    if not ok2 then return nil, tostring(parsed) end
+    return parsed
+end
+
+local function fetch_all_servers(placeId)
+    if cache.pages and (tick() - cache.ts) < CACHE_TTL then return cache.pages end
+    local all, cursor = {}, nil
+    for i=1, MAX_PAGES do
+        local parsed, err = fetch_page(placeId, cursor)
+        if not parsed then log("fetch_page err: "..tostring(err)); break end
+        if parsed.data then for _,s in ipairs(parsed.data) do table.insert(all, s) end end
+        cursor = parsed.nextPageCursor
+        if not cursor or cursor == "" then break end
+        task.wait(POLITE_WAIT)
+    end
+    cache.pages = all
+    cache.ts = tick()
+    return all
+end
+
+local function parse_iso8601(s)
+    if not s or type(s) ~= "string" then return nil end
+    s = s:gsub("Z$","")
+    local y,m,d,hh,mm,ss = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
+    if y then return os.time{ year=tonumber(y), month=tonumber(m), day=tonumber(d), hour=tonumber(hh), min=tonumber(mm), sec=tonumber(ss) } end
+    return nil
+end
+
+local function infer_timestamp(server)
+    if type(server) ~= "table" then return nil end
+    local keys = {"created","createdAt","updated","updatedAt","startedAt","createdUtc","startTime","startTimestamp","createdTimestamp","timeCreated","startedTimestamp","unixTime"}
+    for _,k in ipairs(keys) do
+        local v = server[k]
+        if type(v) == "string" then
+            local t = parse_iso8601(v)
+            if t then return t end
+            local n = tonumber(v)
+            if n then
+                if n > 1e12 then n = math.floor(n/1000) end
+                if n > 1e9 then return n end
+            end
+        elseif type(v) == "number" then
+            local n = v
+            if n > 1e12 then n = math.floor(n/1000) end
+            if n > 1e9 then return n end
+        end
+    end
+    return nil
+end
+
+local function in_history_recent(jobId)
+    for _,h in ipairs(getgenv().ServerHopPro.history) do if tostring(h.id) == tostring(jobId) then return true end end
+    return false
+end
+
+local function pick_oldest(servers)
+    if not servers or #servers == 0 then return nil end
+    local best, bestT = nil, math.huge
+    for _,s in ipairs(servers) do
+        local sid = tostring(s.id or s.jobId or "")
+        if sid ~= tostring(game.JobId or "") and not is_blacklisted(sid) and not in_history_recent(sid) then
+            local t = infer_timestamp(s)
+            if t and t < bestT then best, bestT = s, t end
+        end
+    end
+    if best then return best end
+    local candidate, lowest = nil, math.huge
+    for _,s in ipairs(servers) do
+        local sid = tostring(s.id or s.jobId or "")
+        if sid ~= tostring(game.JobId or "") and not is_blacklisted(sid) then
+            local p = tonumber(s.playing or s.playCount or s.playingCount) or 0
+            if p < lowest then candidate, lowest = s, p end
+        end
+    end
+    return candidate
+end
+
+local function pick_lowest(servers)
+    if not servers or #servers == 0 then return nil end
+    local candidate, lowest = nil, math.huge
+    for _,s in ipairs(servers) do
+        local sid = tostring(s.id or s.jobId or "")
+        if sid ~= tostring(game.JobId or "") and not is_blacklisted(sid) and not in_history_recent(sid) then
+            local p = tonumber(s.playing or s.playCount or s.playingCount) or 0
+            if p < lowest then candidate, lowest = s, p end
+        end
+    end
+    if candidate then return candidate end
+    return pick_oldest(servers)
+end
+
+local function pick_hybrid(servers)
+    if not servers or #servers == 0 then return nil end
+    local candidates = {}
+    local oldest = pick_oldest(servers)
+    if oldest then table.insert(candidates, oldest) end
+    local lowest = pick_lowest(servers)
+    if lowest and tostring(lowest.id or lowest.jobId) ~= tostring(oldest and (oldest.id or oldest.jobId)) then table.insert(candidates, lowest) end
+    local best, bestScore = nil, math.huge
+    for _,s in ipairs(candidates) do
+        local t = infer_timestamp(s) or 0
+        local p = tonumber(s.playing or s.playCount or s.playingCount) or 0
+        local score = (p + 1) + (t > 0 and 1/(t+1) or 0)
+        if score < bestScore then bestScore, best = score, s end
+    end
+    return best or oldest or lowest
+end
+
+local function choose_server(servers, mode)
+    if mode == "Oldest" then return pick_oldest(servers) end
+    if mode == "Lowest" then return pick_lowest(servers) end
+    if mode == "Hybrid" then return pick_hybrid(servers) end
+    return pick_oldest(servers)
+end
+
+local function teleport_and_watch(jobId)
+    local before = tostring(game.JobId or "")
+    local ok,err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(tonumber(PLACE_ID) or PLACE_ID, tostring(jobId), LocalPlayer)
+    end)
+    if not ok then log("Teleport error: "..tostring(err)); add_blacklist(jobId, "teleport_error"); return false end
+    local timeout = tonumber(getgenv().ServerHopPro.settings.teleportTimeout) or 18
+    local start = tick()
+    while tick() - start < timeout do
+        if tostring(game.JobId or "") ~= before then return true end
+        task.wait(0.5)
+    end
+    log("Teleport watchdog timeout for "..tostring(jobId))
+    add_blacklist(jobId, "timeout_watchdog")
+    return false
+end
+
+local function try_capture_self_source()
+    if has_readfile and has_isfile and isfile(SELF_FILENAME) then
+        local ok, content = pcall(function() return readfile(SELF_FILENAME) end)
+        if ok and content and tostring(content):match("%S") then return content end
+    end
+    if debug and debug.getinfo then
+        local ok, info = pcall(function() return debug.getinfo(2, "S") end)
+        if ok and info and info.source and type(info.source) == "string" and info.source:sub(1,1) == "@" then
+            local path = info.source:sub(2)
+            if has_readfile and has_isfile and isfile(path) then local ok2, c = pcall(function() return readfile(path) end) if ok2 and c and tostring(c):match("%S") then return c end end
+        end
+    end
+    return nil
+end
+
+local function build_loader_code(scriptURL)
+    scriptURL = tostring(scriptURL or "")
+    if scriptURL ~= "" then
+        return [[
+local ok,err = pcall(function()
+    local raw = game:HttpGet("]] .. scriptURL .. [[")
+    local fnok, fn = pcall(loadstring, raw)
+    if fnok and type(fn) == "function" then pcall(fn) end
+end)
+if not ok then warn("[ServerHop Loader] HTTP loader failed:", err) end
+]]
+    else
+        return [[
+if readfile and isfile and isfile("]]..SELF_FILENAME..[[") then
+    local ok, src = pcall(function() return readfile("]]..SELF_FILENAME..[[") end)
+    if ok and src then
+        local ok2, fn = pcall(loadstring, src)
+        if ok2 and type(fn) == "function" then pcall(fn) end
+    end
+else
+    warn("[ServerHop] no self-file or script URL configured for auto re-exec")
+end
+]]
+    end
+end
+
+local function self_write_and_queue(scriptURL)
+    local captured = try_capture_self_source()
+    if captured and has_writefile then pcall(function() writefile(SELF_FILENAME, captured) end); log("Wrote self file") end
+    if scriptURL and scriptURL:match("%S") and has_writefile then local ok,raw = pcall(function() return game:HttpGet(scriptURL) end) if ok and raw and raw:match("%S") then pcall(function() writefile(SELF_FILENAME, raw) end) end end
+    local loader = build_loader_code(scriptURL)
+    if queue_on_teleport_fn then pcall(function() queue_on_teleport_fn(loader) end); log("Queued loader"); return true end
+    if has_writefile then pcall(function() writefile(SELF_FILENAME, loader) end); log("Wrote loader to self file") end
+    return false
+end
+
+local function save_slot(name)
+    if not name or tostring(name) == "" then name = "Slot_"..tostring(os.time()) end
+    local sid = tostring(game.JobId or "")
+    getgenv().ServerHopPro.slots[tostring(name)] = { place = PLACE_ID, jobId = sid, ts = os.time() }
+    pcall(persist_save)
+    log("Saved slot "..tostring(name).." -> "..sid)
+end
+
+local function rejoin_slot(name)
+    if not name or tostring(name) == "" then return false end
+    local s = getgenv().ServerHopPro.slots[tostring(name)]
+    if not s or not s.jobId then return false end
+    return teleport_and_watch(s.jobId)
+end
+
+local function auto_hop_loop()
+    local settings = getgenv().ServerHopPro.settings
+    local maxRetries = tonumber(settings.maxRetries) or 0
+    local attempt = 0
+    local backoff = tonumber(settings.backoffBase) or RETRY_BASE
+    while settings and settings.AutoHop do
+        attempt = attempt + 1
+        if maxRetries > 0 and attempt > maxRetries then log("Max retries reached"); break end
+        local all = fetch_all_servers(PLACE_ID)
+        local filtered = {}
+        for _,s in ipairs(all) do
+            local p = tonumber(s.playing or s.playCount or s.playingCount) or 0
+            local sid = tostring(s.id or s.jobId or "")
+            if sid ~= tostring(game.JobId or "") and not is_blacklisted(sid) then
+                if p >= (settings.minPlayers or 0) and ((settings.skipFullThreshold or 0) <= 0 or p < (settings.skipFullThreshold or 0)) then
+                    local t = infer_timestamp(s) or 0
+                    if (settings.ageThresholdSec or 0) <= 0 or t <= 0 or (os.time() - t) >= (settings.ageThresholdSec or 0) then table.insert(filtered, s) end
+                end
+            end
+        end
+        if #filtered == 0 then log("No servers matched filters, attempt "..tostring(attempt)); task.wait(math.min(backoff, RETRY_MAX)); backoff = math.min(backoff * 1.5, RETRY_MAX); continue end
+        local chosen = choose_server(filtered, settings.mode or "Oldest")
+        if not chosen then log("choose_server nil"); task.wait(math.min(backoff, RETRY_MAX)); backoff = math.min(backoff * 1.5, RETRY_MAX); continue end
+        local sid = tostring(chosen.id or chosen.jobId or "")
+        getgenv().ServerHopPro.lastAttempt = { id = sid, ts = os.time(), players = chosen.playing or chosen.playCount or chosen.playingCount }
+        add_history(sid)
+        pcall(persist_save)
+        log("AutoHop attempt "..tostring(attempt).." -> "..sid)
+        local ok = teleport_and_watch(sid)
+        if ok then log("AutoHop success -> "..sid); return true else log("AutoHop fail -> "..sid); add_blacklist(sid, "teleport_fail"); backoff = math.min(backoff * 1.5, RETRY_MAX); task.wait(math.min(backoff, RETRY_MAX)) end
+    end
+    log("AutoHop ended")
+    return false
+end
+
+local function anti_afk_start()
+    pcall(function()
+        LocalPlayer.Idled:Connect(function()
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(0,0))
+            end)
+        end)
+    end)
+    task.spawn(function()
+        while true do
+            pcall(function()
+                if LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = LocalPlayer.Character.HumanoidRootPart
+                    local orig = hrp.CFrame
+                    local jitter = (math.random() - 0.5) * 0.6
+                    pcall(function() hrp.CFrame = hrp.CFrame * CFrame.new(jitter,0,0) end)
+                    task.wait(0.6 + math.random()*1.2)
+                    pcall(function() hrp.CFrame = orig end)
+                end
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(math.random(0,100), math.random(0,100)))
+            end)
+            task.wait(20 + math.random()*25)
+        end
+    end)
+end
+
+pcall(anti_afk_start)
+
+local Rayfield = nil
+do
+    local ok, mod = pcall(function() return loadstring(game:HttpGet('https://sirius.menu/rayfield'))() end)
+    if not ok or not mod then error("Failed to load Rayfield UI") end
+    Rayfield = mod
+end
+
+local Window = Rayfield:CreateWindow({
+    Name = "ServerHop Pro",
+    LoadingTitle = "ServerHop Pro",
+    LoadingSubtitle = "Advanced",
+    ConfigurationSaving = { Enabled = true, FolderName = "ServerHopProCfg", FileName = "Settings" }
+})
+
+local TabMain = Window:CreateTab("Main", 4483362458)
+local TabBrowser = Window:CreateTab("Browser", 4483362458)
+local TabSaves = Window:CreateTab("Saves", 4483362458)
+local TabSettings = Window:CreateTab("Settings", 4483362458)
+local TabLogs = Window:CreateTab("Logs", 4483362458)
+
+local lblStatus = TabMain:CreateLabel("Status: Idle")
+TabMain:CreateToggle({
+    Name = "Auto-Hop (loop)",
+    CurrentValue = getgenv().ServerHopPro.settings.AutoHop,
+    Callback = function(val)
+        getgenv().ServerHopPro.settings.AutoHop = val
+        persist_save()
+        if val then lblStatus:Set("Status: Auto-Hop running"); task.spawn(auto_hop_loop) else lblStatus:Set("Status: Idle") end
+    end
+})
+
+TabMain:CreateToggle({
+    Name = "Auto-Rejoin Saved",
+    CurrentValue = getgenv().ServerHopPro.settings.AutoRejoin,
+    Callback = function(val)
+        getgenv().ServerHopPro.settings.AutoRejoin = val
+        persist_save()
+        if val then
+            local first = next(getgenv().ServerHopPro.slots)
+            if first then task.spawn(function() teleport_and_watch(getgenv().ServerHopPro.slots[first].jobId) end) end
+        end
+    end
+})
+
+TabMain:CreateButton({
+    Name = "One-shot: Hop now",
+    Callback = function()
+        lblStatus:Set("Status: Running one-shot")
+        task.spawn(function()
+            local settings = getgenv().ServerHopPro.settings
+            local all = fetch_all_servers(PLACE_ID)
+            local filtered = {}
+            for _,s in ipairs(all) do
+                local p = tonumber(s.playing or s.playCount or s.playingCount) or 0
+                local sid = tostring(s.id or s.jobId or "")
+                if sid ~= tostring(game.JobId or "") and not is_blacklisted(sid) then
+                    if p >= (settings.minPlayers or 0) and ((settings.skipFullThreshold or 0) <= 0 or p < (settings.skipFullThreshold or 0)) then
+                        local t = infer_timestamp(s) or 0
+                        if (settings.ageThresholdSec or 0) <= 0 or t <= 0 or (os.time() - t) >= (settings.ageThresholdSec or 0) then table.insert(filtered, s) end
+                    end
+                end
+            end
+            local chosen = choose_server(filtered, settings.mode or "Oldest")
+            if chosen then
+                local sid = tostring(chosen.id or chosen.jobId or "")
+                persist_save()
+                local ok = teleport_and_watch(sid)
+                if ok then Rayfield:Notify({Title="ServerHop Pro", Content="One-shot teleport success: "..sid, Duration=4}) end
+            else
+                Rayfield:Notify({Title="ServerHop Pro", Content="No server matched criteria", Duration=4})
+            end
+            lblStatus:Set("Status: Idle")
+        end)
+    end
+})
+
+TabMain:CreateButton({
+    Name = "Save Current Server (named)",
+    Callback = function()
+        local name = "Slot_"..tostring(os.time())
+        save_slot = function() end
+        local sid = tostring(game.JobId or "")
+        getgenv().ServerHopPro.slots[tostring(name)] = { place = PLACE_ID, jobId = sid, ts = os.time() }
+        persist_save()
+        Rayfield:Notify({Title="ServerHop Pro", Content="Saved slot: "..name, Duration=3})
+    end
+})
+
+TabMain:CreateButton({ Name = "Export saves", Callback = function() local ok,msg = export_state(); Rayfield:Notify({Title="ServerHop Pro", Content = msg or (ok and "Exported" or "Failed"), Duration=3}) end })
+
+local serverParagraph = TabBrowser:CreateParagraph({ Title = "Servers", Content = "Press Refresh" })
+TabBrowser:CreateButton({
+    Name = "Refresh Server List",
+    Callback = function()
+        serverParagraph:Set("Fetching...")
+        task.spawn(function()
+            local all = fetch_all_servers(PLACE_ID)
+            if not all or #all == 0 then serverParagraph:Set("No servers"); return end
+            local out = {}
+            for i=1, math.min(60,#all) do
+                local s = all[i]
+                local id = tostring(s.id or s.jobId or "")
+                local players = tostring(s.playing or s.playCount or s.playingCount or "0")
+                local t = infer_timestamp(s) or 0
+                local age = (t>0) and tostring(os.time()-t).."s" or "unknown"
+                table.insert(out, ("[%d] id=%s players=%s age=%s"):format(i, id, players, age))
+            end
+            serverParagraph:Set(table.concat(out, "\n"))
+        end)
+    end
+})
+
+TabBrowser:CreateButton({ Name = "Manual Join by ID (prompt)", Callback = function() local modal = Window:CreateTab("Manual", 4483362458); modal:CreateInput({ Name = "Server ID", PlaceholderText = "", RemoveTextAfterFocusLost = false, Callback = function(txt) if txt and tostring(txt):match("%S") then local ok = teleport_and_watch(txt); Rayfield:Notify({Title="ServerHop Pro", Content = ok and "Joined "..txt or "Failed "..txt, Duration=3}) end end }) end })
+
+local slotsPara = TabSaves:CreateParagraph({ Title = "Saved slots", Content = "No slots" })
+local function refresh_slots_ui()
+    local lines = {}
+    for name,slot in pairs(getgenv().ServerHopPro.slots) do table.insert(lines, ("%s => id=%s saved=%s"):format(name, tostring(slot.jobId or "nil"), os.date("%Y-%m-%d %H:%M:%S", slot.ts or 0))) end
+    if #lines == 0 then slotsPara:Set("No slots saved") else slotsPara:Set(table.concat(lines, "\n")) end
+end
+refresh_slots_ui()
+
+TabSaves:CreateInput({ Name = "Save slot name", PlaceholderText = "e.g. GrindingServer", RemoveTextAfterFocusLost = true, Callback = function(txt) if not txt or txt == "" then Rayfield:Notify({Title="ServerHop Pro", Content="Provide a slot name", Duration=2}); return end local sid = tostring(game.JobId or ""); getgenv().ServerHopPro.slots[tostring(txt)] = { place = PLACE_ID, jobId = sid, ts = os.time() }; persist_save(); refresh_slots_ui(); Rayfield:Notify({Title="ServerHop Pro", Content="Saved slot: "..tostring(txt), Duration=2}) end })
+
+TabSaves:CreateInput({ Name = "Rejoin slot name", PlaceholderText = "Enter slot name", RemoveTextAfterFocusLost = true, Callback = function(txt) if not txt or txt == "" then Rayfield:Notify({Title="ServerHop Pro", Content="Provide a slot name", Duration=2}); return end local slot = getgenv().ServerHopPro.slots[tostring(txt)]; if not slot or not slot.jobId then Rayfield:Notify({Title="ServerHop Pro", Content="Slot not found", Duration=2}); return end local ok = teleport_and_watch(slot.jobId); Rayfield:Notify({Title="ServerHop Pro", Content = ok and "Rejoined "..txt or "Failed to rejoin", Duration=3}) end })
+
+TabSaves:CreateInput({ Name = "Import JSON (paste)", PlaceholderText = "Paste JSON and press Enter", RemoveTextAfterFocusLost = true, Callback = function(txt) if not txt or txt == "" then Rayfield:Notify({Title="ServerHop Pro", Content="Paste JSON", Duration=2}); return end local ok,msg = import_state(txt); Rayfield:Notify({Title="ServerHop Pro", Content = msg or (ok and "Imported" or "Failed"), Duration=3}); refresh_slots_ui() end })
+
+TabSettings:CreateDropdown({ Name = "Hop Mode", Options = {"Oldest","Lowest","Hybrid"}, CurrentOption = getgenv().ServerHopPro.settings.mode or "Oldest", Callback = function(opt) getgenv().ServerHopPro.settings.mode = opt; persist_save() end })
+TabSettings:CreateInput({ Name = "Min Players (>=)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.minPlayers), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.minPlayers = tonumber(txt) or 0; persist_save() end })
+TabSettings:CreateInput({ Name = "Skip Full Threshold (players >= skip)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.skipFullThreshold), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.skipFullThreshold = tonumber(txt) or 0; persist_save() end })
+TabSettings:CreateInput({ Name = "Age Threshold (seconds)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.ageThresholdSec), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.ageThresholdSec = tonumber(txt) or 0; persist_save() end })
+TabSettings:CreateInput({ Name = "Teleport Timeout (s)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.teleportTimeout), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.teleportTimeout = tonumber(txt) or 18; persist_save() end })
+TabSettings:CreateInput({ Name = "Backoff Base (s)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.backoffBase), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.backoffBase = tonumber(txt) or 3; persist_save() end })
+TabSettings:CreateInput({ Name = "Max Retries (0=inf)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.maxRetries), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.maxRetries = tonumber(txt) or 0; persist_save() end })
+TabSettings:CreateInput({ Name = "Webhook URL (optional)", PlaceholderText = tostring(getgenv().ServerHopPro.settings.webhookURL), RemoveTextAfterFocusLost = true, Callback = function(txt) getgenv().ServerHopPro.settings.webhookURL = tostring(txt or ""); persist_save() end })
+TabSettings:CreateToggle({ Name = "Auto save slot on join", CurrentValue = getgenv().ServerHopPro.settings.autoSaveOnJoin or false, Callback = function(val) getgenv().ServerHopPro.settings.autoSaveOnJoin = val; persist_save() end })
+
+TabLogs:CreateButton({ Name = "Print Log to Console", Callback = function() if has_readfile and has_isfile and isfile(LOG_FILENAME) then print("=== ServerHopPro Log ==="); print(readfile(LOG_FILENAME)); Rayfield:Notify({Title="ServerHop Pro", Content="Log printed to console", Duration=3}) else Rayfield:Notify({Title="ServerHop Pro", Content="No log file found", Duration=3}) end end })
+TabLogs:CreateButton({ Name = "Clear Log", Callback = function() if has_writefile then pcall(function() writefile(LOG_FILENAME,"") end); Rayfield:Notify({Title="ServerHop Pro", Content="Log cleared", Duration=2}) else Rayfield:Notify({Title="ServerHop Pro", Content="Cannot clear log", Duration=2}) end end })
+TabLogs:CreateButton({ Name = "Force Self-Write & Queue", Callback = function() local ok = self_write_and_queue(getgenv().ServerHopPro.settings.ScriptURL or ""); Rayfield:Notify({Title="ServerHop Pro", Content = ok and "Queued auto re-exec" or "Queue failed/no queue", Duration=3}) end })
+
+task.spawn(function() while task.wait(1.5) do pcall(function() refresh_slots_ui() end) end end)
+
+if getgenv().ServerHopPro.settings.AutoHop then task.spawn(auto_hop_loop) end
+if getgenv().ServerHopPro.settings.AutoRejoin then
+    local first = next(getgenv().ServerHopPro.slots)
+    if first then task.spawn(function() teleport_and_watch(getgenv().ServerHopPro.slots[first].jobId) end) end
+end
+
+log("ServerHop Pro v"..VERSION.." loaded. writefile="..tostring(has_writefile).." queue_on_teleport="..tostring(queue_on_teleport_fn ~= nil))
+Rayfield:Notify({Title="ServerHop Pro", Content="Loaded (v"..VERSION..")", Duration=4})
+
