@@ -1,18 +1,27 @@
--- game load & fps unlocker
+
+-- =========================
+-- zzzhub
+-- Version: 1.0.0
+-- =========================
 
 repeat task.wait() until game:IsLoaded()
 
+-- FPS Unlock
 if setfpscap then
     setfpscap(1000000)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "zzzhub",
+        Text = "FPS Unlocked!",
+        Duration = 2,
+        Button1 = "Okay"
+    })
 else
     warn("Your exploit does not support setfpscap.")
 end
 
--- library
-local l = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
--- services 
-
+-- ====================== SERVICES ======================
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -25,21 +34,35 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Backpack = LocalPlayer:WaitForChild("Backpack")
 
--- settings
-
+-- ====================== SETTINGS ======================
 local AutoCollect = false
+local AutoCollectV2 = false
+local AutoEB = false
+local AutoEBRunning = false
+local AutoCollectV2Running = false
 local AutoFarm = false
 local autoClicking = false
-local AutoCollectDelay = 60
-local ClickInterval = 0.25
-local HeldToolName = "Basic Bat"
+local AutoCollectDelay = 20
+local ClickInterval = 0.05 -- Minimum working speed
+local AntiAFKEnabled = false
+
 local SellPlant = false
 local SellBrainrot = false
+local SellEverything = false
+
+-- Multi-bat support from DYHUB
+local HeldToolNames = {
+    "Basic Bat",
+    "Leather Grip Bat",
+    "Iron Plate Bat",
+    "Iron Core Bat",
+    "Aluminum Bat"
+}
+local HeldToolName = nil
 
 local serverStartTime = os.time()
 
--- shop items
-
+-- ====================== SHOP ITEMS ======================
 local shop = {
     seedList = {
         "Cactus Seed",
@@ -49,33 +72,39 @@ local shop = {
         "Dragon Seed",
         "Eggplant Seed",
         "Watermelon Seed",
+        "Grape Seed",
         "Cocotank Seed",
         "Carnivorous Plant Seed",
         "Mr Carrot Seed",
         "Tomatrio Seed",
         "Shroombino Seed"
     },
-
     gearList = {
         "Water Bucket",
         "Frost Grenade",
         "Banana Gun",
         "Frost Blower",
         "Carrot Launcher"
+    },
+    PlatformList = {
+        "1","2","3","4","5","6","7","8","9","10",
+        "11","12","13","14","15","16","17"
     }
 }
 
--- variables
-
+-- ====================== VARIABLES ======================
 local selectedSeeds = {}
 local selectedGears = {}
-local AutoBuySelectedSeed = false
-local AutoBuySelectedGear = false
+local selectedPlatform = {}
+
 local AutoBuyAllSeed = false
 local AutoBuyAllGear = false
+local AutoBuyPlatformAll = false
+local AutoBuySelectedGear = false
+local AutoBuySelectedSeed = false
+local AutoBuyPlatformSelect = false
 
--- helper functions
-
+-- ====================== HELPER FUNCTIONS ======================
 local function GetMyPlot()
     for _, plot in ipairs(Workspace.Plots:GetChildren()) do
         local playerSign = plot:FindFirstChild("PlayerSign")
@@ -117,7 +146,6 @@ local function FormatTime(sec)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- safe remote getters
 local function GetBridgeNet2()
     return ReplicatedStorage:FindFirstChild("BridgeNet2")
 end
@@ -126,31 +154,24 @@ local function GetRemotesFolder()
     return ReplicatedStorage:FindFirstChild("Remotes")
 end
 
--- window
-
-local Window = l:CreateWindow({
-    Title = "Horizon Hub - Plants vs Brainrots",
-    Icon = "rbxassetid://128130788295246", 
-    Author = "Laspard",
-    Folder = "HorizonHubV3/PlantsVsBrainrots",
-    Size = UDim2.fromOffset(500, 390),
+-- ====================== WINDOW ======================
+local Window = WindUI:CreateWindow({
+    Title = "zzzhub",
+    Icon = "rbxassetid://18793083209",
+    Author = "Plants Vs Brainrots | Best of Both",
+    Folder = "zzzhub",
+    Size = UDim2.fromOffset(500, 350),
     Transparent = true,
     Theme = "Dark",
-    Resizable = true,
-    SideBarWidth = 150,
     BackgroundImageTransparency = 0.8,
+    HasOutline = false,
     HideSearchBar = true,
-    ScrollBarEnabled = true,
-    User = {
-        Enabled = true,
-        Anonymous = false,
-        Callback = function()
-        end,
-    },
+    ScrollBarEnabled = false,
+    User = { Enabled = true, Anonymous = false },
 })
 
 Window:EditOpenButton({
-    Title = "Horizon Hub - Open",
+    Title = "zzzhub - Open",
     Icon = "monitor",
     CornerRadius = UDim.new(0, 6),
     StrokeThickness = 2,
@@ -158,36 +179,92 @@ Window:EditOpenButton({
     Draggable = true,
 })
 
--- tabs
-
-local Main = Window:Tab({Title = "Main", Icon = "house"})
-local Sell = Window:Tab({Title = "Sell", Icon = "dollar-sign"})
-local Shop = Window:Tab({Title = "Shop", Icon = "shopping-cart"})
-local Collect = Window:Tab({Title = "Auto", Icon = "crown"})
-Window:Divider()
-local InfoTab = Window:Tab({ Title = "Info", Icon = "info"})
-
-
+local InfoTab = Window:Tab({ Title = "Information", Icon = "info" })
+local MainDivider = Window:Divider()
+local Main = Window:Tab({ Title = "Main", Icon = "rocket" })
+local Shop = Window:Tab({ Title = "Shop", Icon = "shopping-cart" })
+local Collect = Window:Tab({ Title = "Auto", Icon = "crown" })
+local Sell = Window:Tab({ Title = "Sell", Icon = "dollar-sign" })
+local Misc = Window:Tab({ Title = "Misc", Icon = "settings" })
 Window:SelectTab(1)
 
-Main:Section({ Title = "Auto Farm", Icon = "crown" })
+-- ====================== MAIN ======================
+Main:Section({ Title = "Auto Farm", Icon = "backpack" })
 
-Main:Section({ Title = "Use on PRIVATE SERVERS only!", Icon = "badge-alert" })
+Main:Paragraph({
+    Title = "Your Status",
+    Desc = "[+] Show Plots \n[+] Show Rebirth \n[+] Show Money \n[+] Show Playtime",
+    Image = "rbxassetid://18793083209",
+    ImageSize = 50,
+    Buttons = {
+        {
+            Icon = "info",
+            Title = "Show Status",
+            Callback = function()
+                local message = "Your Status\n"
+                message = message .. "Plots: " .. GetMyPlotName() .. "\n"
+                message = message .. "Rebirth: " .. GetRebirth() .. "\n"
+                message = message .. "Money: " .. GetMoney() .. "\n"
+                message = message .. "Playtime: " .. FormatTime(os.time() - serverStartTime)
 
--- cache
+                WindUI:Notify({
+                    Title = "Status Update",
+                    Content = message,
+                    Duration = 2,
+                    Icon = "user-check",
+                })
+            end
+        }
+    }
+})
 
+Main:Section({ Title = "Use on private servers for security", Icon = "triangle-alert" })
+
+Main:Slider({
+    Title = "Auto Farm Speed",
+    Description = "Set click interval (0.05 = fastest working speed)",
+    Value = {Min = 0.05, Max = 1.0, Default = 0.05},
+    Step = 0.01,
+    Callback = function(val)
+        ClickInterval = val
+    end
+})
+
+-- ====================== BRAINROTS CACHE (Horizon's Superior Detection + Real-time Updates) ======================
 local BrainrotsCache = {}
+local BrainrotsFolder = nil
 
 local function UpdateBrainrotsCache()
     local ok, folder = pcall(function()
         return Workspace:WaitForChild("ScriptedMap"):WaitForChild("Brainrots")
     end)
     if not ok or not folder then return end
+    BrainrotsFolder = folder
     BrainrotsCache = {}
     for _, b in ipairs(folder:GetChildren()) do
         if b:FindFirstChild("BrainrotHitbox") then
             table.insert(BrainrotsCache, b)
         end
+    end
+end
+
+-- Real-time brainrot detection
+local function SetupBrainrotListener()
+    if BrainrotsFolder then
+        BrainrotsFolder.ChildAdded:Connect(function(child)
+            if child:FindFirstChild("BrainrotHitbox") or child:WaitForChild("BrainrotHitbox", 0.5) then
+                table.insert(BrainrotsCache, child)
+            end
+        end)
+        
+        BrainrotsFolder.ChildRemoved:Connect(function(child)
+            for i, b in ipairs(BrainrotsCache) do
+                if b == child then
+                    table.remove(BrainrotsCache, i)
+                    break
+                end
+            end
+        end)
     end
 end
 
@@ -207,44 +284,60 @@ local function GetNearestBrainrot()
     return nearest
 end
 
--- utility 
-
+-- ====================== UTILITY (DYHUB's Multi-Bat + Horizon's positioning) ======================
 local function EquipBat()
-    local tool = Backpack:FindFirstChild(HeldToolName) or Character:FindFirstChild(HeldToolName)
-    if tool then tool.Parent = Character end
+    -- First check if we already have a bat equipped
+    for _, toolName in ipairs(HeldToolNames) do
+        if Character:FindFirstChild(toolName) then
+            HeldToolName = toolName
+            return true  -- Already equipped, no need to re-equip
+        end
+    end
+    
+    -- If no bat is equipped, find one in backpack and equip it
+    for _, toolName in ipairs(HeldToolNames) do
+        local tool = Backpack:FindFirstChild(toolName)
+        if tool then
+            tool.Parent = Character
+            HeldToolName = toolName
+            return true
+        end
+    end
+    return false
 end
 
 local function InstantWarpToBrainrot(brainrot)
     local hitbox = brainrot and brainrot:FindFirstChild("BrainrotHitbox")
     if hitbox then
-        local offset = Vector3.new(0, 1, 3)
+        local offset = Vector3.new(0, 1, 3) -- Horizon's stable positioning
         HumanoidRootPart.CFrame = CFrame.new(hitbox.Position + offset, hitbox.Position)
     end
 end
 
--- improved auto clicker using VirtualUser for reliability
+-- DYHUB's faster clicking
 local function DoClick()
-    -- simulate press & release
     pcall(function()
         VirtualUser:Button1Down(Vector2.new(0, 0))
-        task.wait(0.03)
+        task.wait(0.05) -- Faster than Horizon
         VirtualUser:Button1Up(Vector2.new(0, 0))
     end)
 end
 
+-- ====================== AUTO FARM (Combined Best) ======================
 Main:Toggle({
-    Title = "Auto Farm",
-    Desc  = "Automatically Attacks the BRAINROTS",
+    Title = "Auto Farm OP",
+    Description = "Real-time brainrot detection + optimized farming",
     Default = false,
-    Callback = function(v)
-    AutoFarm = v
-    autoClicking = v
+    Callback = function(state)
+        AutoFarm = state
+        autoClicking = state
 
-    if v then
-        EquipBat()
+        if state then
+            EquipBat()
             UpdateBrainrotsCache()
+            SetupBrainrotListener()  -- Enable real-time detection
 
-            -- AUTO CLICKER
+            -- DYHUB's Fast Auto Clicker
             task.spawn(function()
                 while autoClicking do
                     if Character and Character:FindFirstChild(HeldToolName) then
@@ -254,32 +347,35 @@ Main:Toggle({
                 end
             end)
 
-            -- AUTO EQUIP
+            -- Auto Equip
             task.spawn(function()
                 while AutoFarm do
                     if Character and not Character:FindFirstChild(HeldToolName) then
                         EquipBat()
                     end
-                    task.wait(0.5)
+                    task.wait(0.25)
                 end
             end)
 
-            -- BRAINROTS CACHE REFRESH
+            -- Cache Refresh (balanced timing)
             task.spawn(function()
                 while AutoFarm do
                     UpdateBrainrotsCache()
-                    task.wait(1)
+                    task.wait(0.5)  -- Balanced refresh rate
                 end
             end)
 
-            -- AUTO FARM BRAINROT
+            -- Combined Auto Farm Logic (with Horizon's wait logic)
             task.spawn(function()
                 while AutoFarm do
                     local currentTarget = GetNearestBrainrot()
+                    
+                    -- Horizon's logic: wait when no brainrot found
                     if not currentTarget then
-                        task.wait(0.5)
+                        task.wait(0.3)  -- Give cache time to update
                         continue
                     end
+                    
                     if currentTarget and currentTarget:FindFirstChild("BrainrotHitbox") then
                         InstantWarpToBrainrot(currentTarget)
                         pcall(function()
@@ -287,25 +383,20 @@ Main:Toggle({
                             if remotes and remotes:FindFirstChild("AttacksServer") and remotes.AttacksServer:FindFirstChild("WeaponAttack") then
                                 remotes.AttacksServer.WeaponAttack:FireServer({ { target = currentTarget.BrainrotHitbox } })
                             else
-                                -- fallback to generic path (keeps original path from script)
-                                local ok, _ = pcall(function()
-                                    ReplicatedStorage.Remotes.AttacksServer.WeaponAttack:FireServer({ { target = currentTarget.BrainrotHitbox } })
-                                end)
+                                ReplicatedStorage.Remotes.AttacksServer.WeaponAttack:FireServer({ { target = currentTarget.BrainrotHitbox } })
                             end
                         end)
                     end
                     task.wait(ClickInterval)
                 end
             end)
-
         else
             autoClicking = false
         end
     end
 })
 
--- auto colect
-
+-- ====================== AUTO COLLECT ======================
 local function GetNearestPlot()
     local nearestPlot = nil
     local minDist = math.huge
@@ -356,7 +447,7 @@ Collect:Section({ Title = "Auto Collect", Icon = "hand-coins" })
 Collect:Slider({
     Title = "Auto Collect Delay (sec)",
     Description = "Set delay time between collections",
-    Value = {Min = 1, Max = 60, Default = 5},
+    Value = {Min = 1, Max = 300, Default = 20},
     Step = 1,
     Callback = function(val)
         AutoCollectDelay = val
@@ -364,7 +455,8 @@ Collect:Slider({
 })
 
 Collect:Toggle({
-    Title = "Auto Collect Money",
+    Title = "Auto Collect Money V1",
+    Description = "Teleport to collect (Horizon method)",
     Default = false,
     Callback = function(state)
         AutoCollect = state
@@ -383,53 +475,47 @@ Collect:Toggle({
 })
 
 Collect:Toggle({
-    Title = "Auto Collect Money V2 (PATCHED)",
-    Description = "Automatically Collect Without Teleport",
+    Title = "Auto Collect Money V2",
+    Description = "No teleport (DYHUB method)",
     Default = false,
     Callback = function(state)
-        if state then
+        AutoCollectV2 = state
+        if state and not AutoCollectV2Running then
+            AutoCollectV2Running = true
             task.spawn(function()
-                while state do
-                    local args = {
-                        {
-                            [2] = "\004"
-                        }
-                    }
-                    game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-                    task.wait(1)
+                while AutoCollectV2 do
+                    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("EquipBestBrainrots"):FireServer()
+                    task.wait(AutoCollectDelay)
                 end
+                AutoCollectV2Running = false
             end)
         end
     end
 })
 
--- collect
-
+-- ====================== AUTO EQUIP ======================
 Collect:Section({ Title = "Auto Equip", Icon = "star" })
 
 Collect:Toggle({
-    Title = "Auto Equip Brainrot (PATCHED)",
-    Description = "Automatically Equip Best Brainrot",
+    Title = "Auto Equip Best Brainrot",
+    Description = "DYHUB's auto equip system",
     Default = false,
     Callback = function(state)
-        if state then
+        AutoEB = state
+        if state and not AutoEBRunning then
+            AutoEBRunning = true
             task.spawn(function()
-                while state do
-                    local args = {
-                        {
-                            [2] = "\004"
-                        }
-                    }
-                    game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-                    task.wait(1)
+                while AutoEB do
+                    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("EquipBestBrainrots"):FireServer()
+                    task.wait(5)
                 end
+                AutoEBRunning = false
             end)
         end
     end
 })
 
--- sell
-
+-- ====================== SELL ======================
 Sell:Section({ Title = "Auto Sell", Icon = "dollar-sign" })
 
 Sell:Toggle({
@@ -458,8 +544,7 @@ Sell:Toggle({
     end
 })
 
--- shop ui
-
+-- ====================== SHOP ======================
 Shop:Section({ Title = "Buy Seed", Icon = "leaf" })
 
 Shop:Dropdown({
@@ -471,49 +556,21 @@ Shop:Dropdown({
     end
 })
 
--- Auto Buy Selected Seed
 Shop:Toggle({
     Title = "Auto Buy Seed (Selected)",
     Default = false,
     Callback = function(state)
         AutoBuySelectedSeed = state
-        if state then
-            task.spawn(function()
-                while AutoBuySelectedSeed do
-                    for _, seed in ipairs(selectedSeeds) do
-                        local args = {{ seed, "\b" }}
-                        game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-                        task.wait(0.5)
-                    end
-                    task.wait(1)
-                end
-            end)
-        end
     end
 })
 
--- Auto Buy All Seed
 Shop:Toggle({
     Title = "Auto Buy Seed (All)",
     Default = false,
     Callback = function(state)
         AutoBuyAllSeed = state
-        if state then
-            task.spawn(function()
-                while AutoBuyAllSeed do
-                    for _, seed in ipairs(shop.seedList) do
-                        local args = {{ seed, "\b" }}
-                        game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-                        task.wait(0.5)
-                    end
-                    task.wait(1)
-                end
-            end)
-        end
     end
 })
-
--- gear
 
 Shop:Section({ Title = "Buy Gear", Icon = "package" })
 
@@ -526,52 +583,115 @@ Shop:Dropdown({
     end
 })
 
--- Auto Buy Selected Gear
 Shop:Toggle({
     Title = "Auto Buy Gear (Selected)",
     Default = false,
     Callback = function(state)
         AutoBuySelectedGear = state
-        if state then
-            task.spawn(function()
-                while AutoBuySelectedGear do
-                    for _, gear in ipairs(selectedGears) do
-                        local args = {{ gear, "\026" }}
-                        game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-                        task.wait(0.5)
-                    end
-                    task.wait(1)
-                end
-            end)
-        end
     end
 })
 
--- Auto Buy All Gear
 Shop:Toggle({
     Title = "Auto Buy Gear (All)",
     Default = false,
     Callback = function(state)
         AutoBuyAllGear = state
-        if state then
+    end
+})
+
+-- DYHUB's Platform Buying
+Shop:Section({ Title = "Buy Platform", Icon = "house" })
+
+Shop:Dropdown({
+    Title = "Select Platform",
+    Values = shop.PlatformList,
+    Multi = true,
+    Callback = function(values)
+        selectedPlatform = values
+    end
+})
+
+Shop:Toggle({
+    Title = "Auto Buy Platform (Selected)",
+    Default = false,
+    Callback = function(state)
+        AutoBuyPlatformSelect = state
+        if state and #selectedPlatform > 0 then
             task.spawn(function()
-                while AutoBuyAllGear do
-                    for _, gear in ipairs(shop.gearList) do
-                        local args = {{ gear, "\026" }}
-                        game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-                        task.wait(0.5)
+                while state do
+                    for _, platform in ipairs(selectedPlatform) do
+                        local BuyPlatformRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyPlatform")
+                        BuyPlatformRemote:FireServer(platform)
+                        task.wait(0.3)
                     end
-                    task.wait(1)
+                    task.wait(0.1)
                 end
             end)
         end
     end
 })
 
--- ====================== LOOPS ======================
--- Selling loop uses safe pcall and only fires when toggled
+Shop:Toggle({
+    Title = "Auto Buy Platform (All)",
+    Default = false,
+    Callback = function(state)
+        AutoBuyPlatformAll = state
+        if state then
+            task.spawn(function()
+                while state do
+                    for _, platform in ipairs(shop.PlatformList) do
+                        local BuyPlatformRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyPlatform")
+                        BuyPlatformRemote:FireServer(platform)
+                        task.wait(0.3)
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+})
+
+-- ====================== MISC (DYHUB Features) ======================
+Misc:Section({ Title = "Misc", Icon = "settings" })
+
+Misc:Toggle({
+    Title = "Anti AFK",
+    Description = "Prevent being kicked",
+    Default = false,
+    Callback = function(state)
+        AntiAFKEnabled = state
+        if state then
+            local conn
+            conn = Players.LocalPlayer.Idled:Connect(function()
+                if AntiAFKEnabled then
+                    VirtualUser:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+                    task.wait(0.1)
+                    VirtualUser:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+                else
+                    conn:Disconnect()
+                end
+            end)
+        end
+    end
+})
+
+Misc:Button({
+    Title = "FPS Boost",
+    Description = "Improve game performance",
+    Callback = function()
+        WindUI:Notify({
+            Title = "FPS Boost",
+            Content = "Executing FPS boost script...",
+            Duration = 2,
+            Icon = "zap",
+        })
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/dyumra/DYHUB-Universal-Game/refs/heads/main/Nigga.lua"))()
+    end
+})
+
+-- ====================== SELLING LOOP ======================
 task.spawn(function()
-    while task.wait(0.69) do
+    while task.wait(0.5) do
         if SellBrainrot or SellPlant or SellEverything then
             local remotes = GetRemotesFolder()
             if remotes and remotes:FindFirstChild("ItemSell") then
@@ -583,56 +703,37 @@ task.spawn(function()
     end
 end)
 
--- Auto buy loop (fixed variable names and safer remote calls)
+-- ====================== AUTO BUY LOOPS ======================
+-- Auto Buy Seed Loop
 task.spawn(function()
     while task.wait(0.95) do
-        if AutoBuyGear and #selectedGears > 0 then
-            local bn = GetBridgeNet2()
-            for _, g in ipairs(selectedGears) do
-                local args = {{g, "\026"}}
+        if AutoBuySelectedSeed and #selectedSeeds > 0 then
+            for _, seed in ipairs(selectedSeeds) do
+                if not AutoBuySelectedSeed then break end
+                local args = {{ seed, "\b" }}
+                local bn = GetBridgeNet2()
                 if bn and bn:FindFirstChild("dataRemoteEvent") then
                     pcall(function() bn.dataRemoteEvent:FireServer(unpack(args)) end)
                 else
-                    pcall(function() ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) end)
-                end
-                task.wait(0.1)
-            end
-        end
-
-        if AutoBuySeed and #selectedSeeds > 0 then
-            local bn = GetBridgeNet2()
-            for _, s in ipairs(selectedSeeds) do
-                local args = {{s, "\b"}}
-                if bn and bn:FindFirstChild("dataRemoteEvent") then
-                    pcall(function() bn.dataRemoteEvent:FireServer(unpack(args)) end)
-                else
-                    pcall(function() ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) end)
-                end
-                task.wait(0.1)
-            end
-        end
-
-        if AutoBuyAllGear then
-            local bn = GetBridgeNet2()
-            for _, g in ipairs(gearList) do
-                local args = {{g, "\026"}}
-                if bn and bn:FindFirstChild("dataRemoteEvent") then
-                    pcall(function() bn.dataRemoteEvent:FireServer(unpack(args)) end)
-                else
-                    pcall(function() ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) end)
+                    pcall(function() 
+                        ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) 
+                    end)
                 end
                 task.wait(0.12)
             end
         end
 
         if AutoBuyAllSeed then
-            local bn = GetBridgeNet2()
-            for _, s in ipairs(seedList) do
-                local args = {{s, "\b"}}
+            for _, seed in ipairs(shop.seedList) do
+                if not AutoBuyAllSeed then break end
+                local args = {{ seed, "\b" }}
+                local bn = GetBridgeNet2()
                 if bn and bn:FindFirstChild("dataRemoteEvent") then
                     pcall(function() bn.dataRemoteEvent:FireServer(unpack(args)) end)
                 else
-                    pcall(function() ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) end)
+                    pcall(function() 
+                        ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) 
+                    end)
                 end
                 task.wait(0.12)
             end
@@ -640,73 +741,69 @@ task.spawn(function()
     end
 end)
 
-Info = InfoTab
-
-local ui = l
-local InviteCode = "5MWnDsEnbw"
-local DiscordAPI = "https://discord.com/api/v10/invites/" .. InviteCode .. "?with_counts=true&with_expiration=true"
-local function LoadDiscordInfo()
-    local success, result = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(ui.Creator.Request({
-            Url = DiscordAPI,
-            Method = "GET",
-            Headers = {
-                ["User-Agent"] = "RobloxBot/1.0",
-                ["Accept"] = "application/json"
-            }
-        }).Body)
-    end)
-
-    if success and result and result.guild then
-        local DiscordInfo = Info:Paragraph({
-            Title = result.guild.name,
-            Desc = ' <font color="#52525b">•</font> Member Count : ' .. tostring(result.approximate_member_count) ..
-                '\n <font color="#16a34a">•</font> Online Count : ' .. tostring(result.approximate_presence_count),
-            Image = "rbxassetid://128130788295246",
-            ImageSize = 42,
-        })
-
-        Info:Button({
-            Title = "Update Info",
-            Callback = function()
-                local updated, updatedResult = pcall(function()
-                    return game:GetService("HttpService"):JSONDecode(ui.Creator.Request({
-                        Url = DiscordAPI,
-                        Method = "GET",
-                    }).Body)
-                end)
-
-                if updated and updatedResult and updatedResult.guild then
-                    DiscordInfo:SetDesc(
-                        ' <font color="#52525b"> </font> Member Count : ' .. tostring(updatedResult.approximate_member_count) ..
-                        '\n <font color="#16a34a"> </font> Online Count : ' .. tostring(updatedResult.approximate_presence_count)
-                    )
+-- Auto Buy Gear Loop
+task.spawn(function()
+    while task.wait(0.95) do
+        if AutoBuySelectedGear and #selectedGears > 0 then
+            for _, gear in ipairs(selectedGears) do
+                if not AutoBuySelectedGear then break end
+                local args = {{ gear, "\026" }}
+                local bn = GetBridgeNet2()
+                if bn and bn:FindFirstChild("dataRemoteEvent") then
+                    pcall(function() bn.dataRemoteEvent:FireServer(unpack(args)) end)
+                else
+                    pcall(function() 
+                        ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) 
+                    end)
                 end
+                task.wait(0.12)
             end
-        })
+        end
 
-        Info:Button({
-            Title = "Copy Our Discord Server Invite Link",
-			Desc = "Click to copy our discord server invite link",
-            Callback = function()
-            setclipboard(tostring("https://discord.gg/" .. InviteCode))
-            Library:Notify({
-            Title = "Discord Server Link Copied!",
-            Content = "Copied! in the clipboard",
-            Duration = 2, 
-            Icon = "check",
-        })
-			end
-        })
-    else
-        Info:Paragraph({
-            Title = "Error fetching Discord Info",
-            Desc = game:GetService("HttpService"):JSONEncode(result),
-            Image = "triangle-alert",
-            ImageSize = 26,
-            Color = "Red",
+        if AutoBuyAllGear then
+            for _, gear in ipairs(shop.gearList) do
+                if not AutoBuyAllGear then break end
+                local args = {{ gear, "\026" }}
+                local bn = GetBridgeNet2()
+                if bn and bn:FindFirstChild("dataRemoteEvent") then
+                    pcall(function() bn.dataRemoteEvent:FireServer(unpack(args)) end)
+                else
+                    pcall(function() 
+                        ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args)) 
+                    end)
+                end
+                task.wait(0.12)
+            end
+        end
+    end
+end)
+
+-- ====================== INFO TAB ======================
+InfoTab:Section({ Title = "zzzhub Info", Icon = "info" })
+
+InfoTab:Paragraph({
+    Title = "Features Combined",
+    Desc = "✅  ",
+    Image = "rbxassetid://18793083209",
+    ImageSize = 42,
+})
+
+InfoTab:Button({
+    Title = "Join Discord",
+    Callback = function()
+        setclipboard("https://discord.gg/sYSvumHTdZ")
+        WindUI:Notify({
+            Title = "Copied!",
+            Content = "Discord invite copied to clipboard",
+            Duration = 2,
+            Icon = "clipboard-check",
         })
     end
-end
+})
 
-LoadDiscordInfo()
+WindUI:Notify({
+    Title = "zzzhub Loaded",
+    Content = "Best of ktro !",
+    Duration = 3,
+    Icon = "check-circle",
+})
